@@ -27,8 +27,30 @@ All research done Nov 18, 2026 via live browser (Devpost search + target sites).
 4. **The Portrait** (Costume) — health check-in whose only dashboard is a painted face that rots with bad weeks. `dorian gray` = 0 results. Highest design ceiling, weakest objective impact.
 5. **Replay Kit** (Skeleton Crew) — typed event log + deterministic replay, with the hook adding an event type live. Best shot at the open "hook scaffolds a capability" beat.
 
+| `resurrection-wave2.md` | Resurrection | 18 more | Marigram, Chord, Optical, Datecode, Chain (DSP/media) |
+| `frankenstein-wave2.md` | Frankenstein | 20 more | Scriptorium, ZPL Forge, EdiScope, DicomLens, TimecodeSync |
+| `skeleton-crew-wave2.md` | Skeleton Crew | 16 more | Branch Kit, Invoice Kit, Shift Kit, Caption Kit, Audit Kit |
+| `costume-contest-wave2.md` | Costume Contest | 16 more | The Lantern, Confessional, Autopsy, Obituary, Ouija |
+
+## Consolidated top picks (both waves)
+
+**Resurrection:** Weatherfax, Answerback, Baudot Bridge, 3615 Bharat, Bang Path, Marigram, Chord, Optical, Datecode, Chain.
+**Frankenstein:** CueForge, TubeMQ, LipiSetu, LabBridge, PlotForge, Scriptorium, ZPL Forge, EdiScope, DicomLens, TimecodeSync, BaudotBridge, NMEALens, GTFSboard, EdiPrint, MorseBridge, EmbroideryPreview, KnitCompile, ChangeRing, TideClock.
+**Skeleton Crew:** Replay Kit, Choice Kit, Voice Kit, Forge Kit, Cadence Kit, Branch Kit, Invoice Kit, Shift Kit, Caption Kit, Audit Kit, Map Kit, Form Kit, Tile Kit, Puzzle Kit, Dialogue Kit, Inventory Kit, Net Kit, I18n Kit, A11y Kit, CLI Kit, Flag Kit.
+**Costume Contest:** The Portrait, Side Project Hospice, The Wake, Curse Breaker, Interrogation Room, The Lantern, The Confessional, The Autopsy, The Obituary, The Ouija, The Wishing Well, The Crypt, The Mirror, The Pendulum, The Graveyard.
+
+## Strongest 5 overall (my ranking)
+
+1. **LipiSetu** (Frankenstein) — legacy Indian font encodings → Unicode; real harm, no crowding, India advantage, round-trip PBT.
+2. **Weatherfax / Marigram** (Resurrection) — HF radiofax / tide-gauge digitisation; zero crowding, DSP + PBT, cyclone/tide relevance.
+3. **The Portrait** (Costume) — `dorian gray` = 0 results anywhere on Devpost; health face that rots/heals; highest design ceiling.
+4. **ZPL Forge** (Frankenstein) — label language workbench; 2 global results; real warehouse/lab audience; lowest build risk.
+5. **Branch Kit / Audit Kit** (Skeleton Crew) — strongest PBT stories (reachability, chain integrity) with the open "hook scaffolds a capability live" beat.
+
 ## Next research wave (not yet done)
 
-- Validate LipiSetu: find redistributable Kruti Dev/Chanakya corpora + a public judgment PDF; confirm mapping tables exist (CP1252→Unicode for Kruti Dev).
-- Validate Weatherfax: confirm a free HF-radiofax sample + decoding approach (HackRF/WAV), and that no Kiroween entry overlaps.
-- Validate Replay Kit hook story: confirm Kiro hook API can scaffold files (docs.kiro.dev).
+- Validate LipiSetu: find redistributable Kruti Dev/Chanakya corpora + a public judgment PDF; confirm mapping tables (CP1252→Unicode).
+- Validate Weatherfax/Marigram: confirm free HF-radiofax sample + decoding approach; tide-gauge chart source.
+- Validate The Portrait: confirm CC0 portrait asset (Rijksmuseum/Met open access) and SVG face feasibility.
+- Validate ZPL Forge: confirm ZPL subset spec and a cheap printer/PDF path.
+- Validate Branch Kit hook story: confirm Kiro hook API can scaffold files.
