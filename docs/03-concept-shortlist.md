@@ -35,3 +35,9 @@ Judging: Impact 20% · Kiro depth 20% · Design 20% · Innovation 20% · Present
 - Presentation: perfect video arc — show a genuinely dead repo, run the crew on camera, end with it alive (green CI) + tombstone-to-life animation.
 
 **Build plan is light:** Crew does most of the coding; the UI is one dashboard page; no hardware, no paid APIs (GitHub API is free).
+
+---
+
+## Addendum (Nov 18, v2)
+
+Operator challenge accepted: Kiro Crew is optional and generic "engine on every request" dilutes the story. Re-consulted ChatGPT + Claude (Sonnet 5.5, medium). Both confirm single deep resurrection > engine, and both independently pick **HyperCard** as the one project to resurrect. See 04-final-pick.md for v2.

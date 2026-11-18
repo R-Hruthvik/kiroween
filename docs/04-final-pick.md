@@ -1,72 +1,49 @@
-# Kiroween 2026 — Final Pick (DRAFT, pending approval)
+# Kiroween 2026 — Final Pick v2 (single deep resurrection) — DRAFT, pending approval
 
-## External AI cross-check (Nov 18, 2026)
+## Strategy revision
 
-Asked both ChatGPT and Gemini (via browser) to evaluate Gravekeeper Crew vs PHANTOM vs NECROMANCER OS.
+User challenge (correct): rules say "uses Kiro (IDE, CLI, Web, and/or Kiro Crew)" — **Kiro Crew is optional**, and a generic "resurrect anything on demand" engine dilutes story and polish. Re-asked ChatGPT; asked Claude (Sonnet 5.5, medium effort) with one complete brief.
 
-| Question | ChatGPT verdict | Gemini verdict |
+**All AIs now agree: build ONE deep resurrection, not an engine.**
+
+| | ChatGPT (re-evaluated) | Claude |
 |---|---|---|
-| Gravekeeper Crew | Solid but "automated repo maintenance tool with Halloween dashboard" risk; 8.4/10; weakest innovation | Category-prize only ($5k Resurrection); arbitrary-repo parsing is a scope trap; demo compile failure risk |
-| PHANTOM (incident-response crew) | Ranked #1, 9.5/10 business relevance | Too dry for a Halloween hackathon; over-engineering scope trap; judges fatigue on DevOps tools |
-| NECROMANCER OS (dead-internet revival) | Ranked #2, most memorable visual concept | **"The absolute winner if executed correctly"** — hits Resurrection + Costume-grade design + natural Kiro-depth |
+| Engine vs single project | "Build a resurrection, not a resurrection engine." Deep resurrection 92/100 vs engine 76/100 | "Yes." Engine = demo of a pipeline, no emotional payload; arbitrary input = unrehearsable demo failure; 2025 winners were all legible in one sentence |
+| Best single project | HyperCard (94/100; GeoCities 87, Flash 87, Pipes 86, Reader 78) | HyperCard — "but not ChatGPT's version" |
+| Key caveat | Don't confuse single focus with shallow build; judges must feel the original magic | **Prior art exists**: Decker (browser HyperCard successor), LiveCode, Internet Archive in-browser stack playback. Novelty must come from the combination, and the video should name prior art and say what we go beyond |
 
-**Agreement:** Gravekeeper is the weakest grand-prize candidate. Disagreement: PHANTOM vs NECROMANCER for #1 — ChatGPT optimizes for impact/rubric, Gemini optimizes for theme/memorability.
+## The pick: a haunted HyperCard revival (Resurrection category)
 
-## Decision: NECROMANCER OS (Resurrection category)
+**One-liner:** "Drag in a real 1989 HyperCard stack — it runs in your browser, and you can edit its scripts." Framed as a haunted Macintosh: stacks are "séances" for dead software.
 
-Why it beats PHANTOM here:
-1. **Presentation (20%)** — Kiroween judges watch ~hundreds of videos. A resurrected 1998 homepage is emotional and visual; an outage log dashboard is a corporate demo. Gemini is right that dry enterprise tools underperform at themed hackathons (ChatGPT's rubric math underweights theme fatigue).
-2. **Innovation (20%)** — transpiling dead web stack (early JS, table layouts, Flash-era) into modern React while *preserving the ghost* is a story no 2025 winner did. Repo-maintenance and incident-response both have existing analogs.
-3. **Feasibility** — with a Wayback Machine MCP + curated scope (3 chosen dead sites), the failure mode is controllable. PHANTOM needs a convincing fake production incident; one flaky sim scene sinks the demo.
-4. **Design (20%)** — "terminal of the dead" UI: paste a dead URL → watch agents dissect it live → resurrected side-by-side with the original. Doubles as Costume-Contest-grade polish without entering that category.
+**What we build:** browser-based HyperCard revival — cards, backgrounds, buttons, fields, browse/edit modes, System 6–style chrome, HyperTalk subset interpreter, classic visual effects (wipe/iris/dissolve), JSON stack format, share/export URL, plus a custom MCP server so Kiro can author stacks from a prompt.
 
-## Concept
+**Why it wins each pillar:**
+- Impact: "software authoring for ordinary people" argument is still true; judges 35+ feel it instantly, others get a charming 1-bit Mac
+- Kiro depth: specs per subsystem (stack model, editor, interpreter, export); PBT on the HyperTalk interpreter (parse/round-trip/eval); hooks run tests on save; steering encodes the HyperTalk grammar + System 6 style guide; MCP = stack authoring
+- Design: complete product — menu bar, window chrome, sounds, effects
+- Innovation: real-stack import + Kiro-driven authoring loop + haunted framing (beyond Decker/LiveCode/Archive playback)
+- Presentation: dead 1989 stack → live in browser → edited live → shared. One take, rehearsable.
 
-**NECROMANCER OS — "The internet forgot its past. We're bringing it back."**
-User pastes the URL of a dead website/app. A Kiro Crew of agents:
-1. **Archivist** — fetches archived source + assets via a custom **Wayback Machine MCP** server
-2. **Time Traveler** — identifies era, browser assumptions, obsolete APIs
-3. **Reverse Engineer** — reconstructs intended interactions from code
-4. **Translator** — converts obsolete code → modern stack (React/TS)
-5. **Artist** — preserves original visual identity (steering doc enforces it)
-6. **QA Ghost** — verifies it runs in a modern browser
-7. **Curator** — writes historical documentation + side-by-side compare
+## 17-day plan (submit by Dec 3, Dec 4 = buffer)
 
-UI: neon-haunted "terminal of the dead" graveyard; tombstone per site; RESURRECT button; live agent log; original-vs-revived split view.
+- D1–2: steering files (vision, HyperTalk grammar, style guide) + specs for 4 subsystems; JSON stack format; render a card
+- D3–6: runtime + editor (cards, backgrounds, buttons, fields, modes, nav, effects, sounds, minimal paint layer)
+- D4–9: HyperTalk interpreter (on mouseUp, go to, put into, if/repeat, ask/answer, visual effect, play, send, chunk expressions) + PBT suite + save hook
+- D7–11: share/export URL + MCP server (add card/button/set script → Kiro authors stacks from prompts)
+- D10–13: real-stack import, timeboxed 3 days, exactly 2–3 freely redistributable stacks. Cut if failing by D13 — fallback: own stacks + prompt-to-stack MCP flow
+- D12–15: 3 showcase stacks (game, interactive story, utility) + haunted-Mac polish
+- D15–17: video, blog post, social post, submission. Video recorded by D15.
 
-## Scope (hard limits — scope creep is the documented #1 risk)
+**MVP must include:** edit/browse modes, buttons, fields, navigation, working HyperTalk subset, share URL, 3 polished stacks, ≥1 imported real stack.
+**Cut:** color, XCMDs, deep paint tools, accounts, cloud, collab, mobile, full compatibility claims.
 
-- **3 curated dead experiences** only:
-  1. A GeoCities-style personal homepage (GIFs, counters, guestbook, tables layout)
-  2. A classic guestbook app (form + server logic)
-  3. A legacy interactive mini-game or DHTML toy
-- Pipeline works for these 3 archetypes; generic "any site" is a non-goal (disclosed honestly in write-up as the current boundary).
-- No PHP/Perl backend execution in-browser — guestbook server logic is modernized client-side or via demo server.
+**#1 demo risk:** real-stack import (binary format + HyperTalk long tail) — choose demo stacks FIRST and build toward them.
 
-## Kiro depth checklist (matches submission write-up requirements exactly)
+## Bonus prizes to stack (pending eligibility answers)
 
-- **Kiro Crew**: the 7 agents above (also qualifies repo for Best Kiro Crew App bonus)
-- **Specs**: spec-driven pipeline definition
-- **Steering**: `legacy-transpile.md` + `preserve-visual-identity.md`
-- **Hooks**: auto-run QA checks when generated components change
-- **MCP**: custom Wayback Machine server (fetch archived pages/assets/metadata)
-- **PBT**: property-based tests on translator round-trips where sensible
+Best Demo (automatic) · Bonus Blog Prize (blog post → 2,000 credits) · Social Blitz (#KiroweenHackathon26 post) · Best Kiro Crew App — optional; only if we ship a small Crew companion, otherwise skip.
 
-## Prize strategy
+## Status
 
-- Main: Resurrection $5k + overall pool ($30k/$20k/$10k)
-- Bonus stack (free points): Best Demo ($1k), Bonus Blog Prize (blog post → 2,000 credits, top-100 pool), Social Blitz (post with `#KiroweenHackathon26`), Best Kiro Crew App ($1k). Startup/Student/Ghost prizes depend on the builder's eligibility — pending operator answers.
-
-## Build plan (17 days)
-
-- Days 1-3: Wayback MCP server + Crew skeleton + spec
-- Days 4-9: pipeline per archetype (homepage → guestbook → game)
-- Days 10-12: graveyard UI + live agent log
-- Days 13-15: polish, fixes, deploy working app
-- Days 16-17: video, blog post, social post, submission form
-
-## Risks
-
-- Wayback availability/rate limits → pre-cached fixture fallback for demo
-- LLM transpile brittleness → steering docs + human-curated targets; QA Ghost gate before "resurrected" verdict
-- Demo crash → recorded screen recording as backup, plus pre-run state
+Awaiting operator approval before build starts.
