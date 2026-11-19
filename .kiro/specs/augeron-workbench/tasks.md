@@ -38,10 +38,11 @@ Source: BUILD_PLAN.md Section 4. Timeline: November 18 to December 4, 2026. Code
 
 ## Phase 5: MCP Server, Showcase Fixtures, and Optional AI Adapter (Days 12 to 13, Nov 29 to 30)
 
-- [ ] Implement `packages/mcp-server/src/index.ts` and register it in `.kiro/settings/mcp.json`. Tools: `augeron_parse_document`, `augeron_project_viewspec`, `augeron_run_pipeline`, `augeron_verify_invariants`.
-- [ ] Author three fixtures in `packages/web/src/fixtures/`: distributed edge cache RFC, AI safety literature brief, zero-downtime billing migration PRD.
-- [ ] Add `optionalLlmAdapter.ts`, configured with `AI.Config(key)`, with automatic fallback to deterministic analyzers.
-- [ ] **Gate:** Kiro IDE invokes the MCP tools successfully. The deployed preview URL works in an incognito browser.
+- [x] Implement `packages/mcp-server/src/index.ts` with a stdio MCP server. Tools: `augeron_parse_document`, `augeron_project_viewspec`, `augeron_run_pipeline`, `augeron_verify_audit`. The tool name is `augeron_verify_audit` (not `augeron_verify_invariants`, which was in the earlier draft). It returns coordinate bijection plus every CONTRADICTION and BROKEN_REF flag. Checked with an SDK stdio client.
+- [ ] Register the server in `.kiro/settings/mcp.json`. **Blocked:** a permission rule (`kiro-scope`) denied the write. Retry once the user lifts the rule or confirms the file.
+- [x] Author three fixtures in `packages/web/src/fixtures/`: distributed edge cache RFC, AI safety literature brief (`research-synthesis.ts`), zero-downtime billing migration PRD (`product-spec-checkout.ts`). Switch with `Doc.Load(rfc|brief|prd)` in System.Tool. Each load is one history snapshot, so `System.Undo` restores the previous document.
+- [x] Add `optionalLlmAdapter.ts`, configured with `AI.Config(key)`. It adds an advisory AI.Review after Spec.Audit. On a missing key, offline, or any failure it falls back to the deterministic output, and the key stays in memory only.
+- [ ] **Gate:** Kiro IDE invokes the MCP tools successfully. The deployed preview URL works in an incognito browser. (Not yet verified inside Kiro. Blocked on the MCP config above.)
 
 ## Phase 6: Polish, Demo Video, and Submission (Days 14 to 16, Dec 1 to 4)
 

@@ -1,0 +1,24 @@
+{
+  "name": "@augeron/mcp-server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Stdio MCP server that exposes the Augeron core engine to Kiro IDE and CLI.",
+  "type": "module",
+  "bin": {
+    "augeron-mcp": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@augeron/core": "0.1.0",
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^7.0.2"
+  }
+}

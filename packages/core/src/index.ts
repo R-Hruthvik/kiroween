@@ -1,7 +1,7 @@
 export * from "./types.js";
 export { parseDocument, rebuildDocument, appendMarkdown, type ParseOptions } from "./ast/parser.js";
 export { flattenNodes, serializeTree } from "./ast/flatten.js";
-export { letterSuffix, REF_PATTERN, COORDINATE_PATTERN } from "./ast/coordinate.js";
+export { letterSuffix, REF_PATTERN, COORDINATE_PATTERN, coordinatesMentioned } from "./ast/coordinate.js";
 export { projectTree, countProjected, flattenProjected, isVisible } from "./viewspec/projector.js";
 export { parseCommand, formatCommand, scanCommandTokens, splitPipeline } from "./oberon/tokenizer.js";
 export {
@@ -19,3 +19,10 @@ export { detectContradictions } from "./analyzers/contradiction.js";
 export { tightenText } from "./analyzers/tightener.js";
 export { buildTaskChecklist } from "./analyzers/extractor.js";
 export { computeAuditFlags, applyFlags, flagCount } from "./analyzers/audit.js";
+export {
+  checkCoordinateBijection,
+  verifyAudit,
+  type AuditVerification,
+  type BijectionReport,
+  type FlaggedItem,
+} from "./analyzers/verify.js";

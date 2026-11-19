@@ -31,3 +31,16 @@ export function letterSuffix(index: number): string {
   }
   return suffix;
 }
+
+/** Coordinates that appear in `text` and exist in `indexByCoord`, in order of first appearance. */
+export function coordinatesMentioned(
+  text: string,
+  indexByCoord: Readonly<Record<string, string>>,
+): string[] {
+  const found = new Set<string>();
+  for (const match of text.matchAll(REF_PATTERN)) {
+    const coord = match[0];
+    if (COORDINATE_PATTERN.test(coord) && Object.hasOwn(indexByCoord, coord)) found.add(coord);
+  }
+  return [...found];
+}
