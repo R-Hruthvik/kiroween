@@ -28,13 +28,13 @@ Source: BUILD_PLAN.md Section 4. Timeline: November 18 to December 4, 2026. Code
 
 ## Phase 4: Zero-Menu Tiled Web Workbench (Days 9 to 11, Nov 26 to 28)
 
-- [ ] Scaffold `packages/web` (Vite, React, TypeScript, Tailwind CSS).
-- [ ] Build `TrackLayout.tsx`: resizable two-track split with Document Track on the left and `System.Tool` and `System.Log` on the right.
-- [ ] Build `NlsDocumentPane.tsx`: `§` gutter badges, role indicators, inline flag highlights, and `a`/`h`/`f`/`u`/`r` hotkeys.
-- [ ] Build `CoordinateSplitPane.tsx`: clicking a `§` reference opens the target node side by side.
-- [ ] Build `SystemToolPane.tsx` (editable command pad with default recipes) and `SystemLogPane.tsx` (clickable log output).
-- [ ] Build `PulseOverlay.tsx`: directional pulse from selection to command.
-- [ ] **Gate:** The full user flow works offline in the browser with no menus or modals.
+- [x] Scaffold `packages/web` (Vite, React, TypeScript, Tailwind CSS).
+- [x] Build `TrackLayout.tsx`: resizable two-track split with Document Track on the left and `System.Tool` and `System.Log` on the right.
+- [x] Build `NlsDocumentPane.tsx`: `§` gutter badges, role indicators, inline flag highlights, and `a`/`h`/`f`/`u`/`r` hotkeys.
+- [x] Build `CoordinateSplitPane.tsx`: clicking a `§` reference opens the target node side by side.
+- [x] Build `SystemToolPane.tsx` (editable command pad with default recipes) and `SystemLogPane.tsx` (clickable log output).
+- [x] Build `PulseOverlay.tsx`: directional pulse from selection to command.
+- [x] **Gate:** The full user flow works offline in the browser with no menus or modals. (Checked with 17 headless-Chrome interaction checks against the production build; that script lives outside the repo. Fonts load from Google, so fonts fall back offline.)
 
 ## Phase 5: MCP Server, Showcase Fixtures, and Optional AI Adapter (Days 12 to 13, Nov 29 to 30)
 

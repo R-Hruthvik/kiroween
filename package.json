@@ -10,6 +10,8 @@
     "packages/mcp-server"
   ],
   "scripts": {
+    "build": "npm --workspace=packages/web run build",
+    "dev": "npm --workspace=packages/web run dev",
     "test": "npm --workspace=packages/core run test",
     "test:pbt": "npm --workspace=packages/core run test:pbt"
   }
