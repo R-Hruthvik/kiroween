@@ -48,7 +48,8 @@ Source: BUILD_PLAN.md Section 4. Timeline: November 18 to December 4, 2026. Code
 
 - [x] `System.Export` downloads `augeron-audited-spec.md` (anchors and Audit Summary table) and logs a confirmation. Checked in headless Chrome.
 - [x] README: overview, quickstart, View-Spec hotkeys, Oberon command catalog, and "Built with Kiro" section.
-- [ ] **Dec 1:** Typography polish, keyboard shortcut cheatsheet in `System.Tool`, clean `git clone` check in a fresh directory.
+- [x] **Dec 1:** Clean `git clone` check in a fresh directory: install, build, `npm test`, and `test:pbt` all exit 0.
+- [ ] **Dec 1:** Typography polish and keyboard shortcut cheatsheet in `System.Tool`.
 - [ ] **Dec 2:** Record the demo video under 3 minutes. Write the Kiro usage write-up. Add README screenshots.
 - [ ] **Dec 3 to 4:** Final submission check: public repo, MIT badge, `/.kiro` at root, live URL, YouTube link. Submit before Dec 4, 2:00 PM PT.
 
