@@ -6,6 +6,7 @@ import {
   createWorkbenchState,
   flattenNodes,
   parseDocument,
+  buildAuditedExport,
   rebuildDocument,
   runLine,
   serializeTree,
@@ -23,6 +24,7 @@ const UI_ONLY_ACTIONS = new Set(["Edit.Source", "Edit.Done"]);
 const LOAD_TOKEN = /^Doc\.Load\(([^)]*)\)$/;
 const CONFIG_TOKEN = /^AI\.Config\(([^)]*)\)$/;
 const CONFIG_ARG = /AI\.Config\([^)]*\)/g;
+export const EXPORT_FILENAME = "augeron-audited-spec.md";
 
 export interface Pulse {
   /** Coordinate of the primary target node, or null when nothing is selected. */
@@ -276,6 +278,26 @@ function configureAi(arg: string): void {
   appendLog(stamp({ title: "AI.Config", body }));
 }
 
+/**
+ * Saves the audited Markdown as a browser download. Returns the confirmation entry for System.Log.
+ * The Blob is revoked after a short delay so the download can start.
+ */
+function downloadAuditedSpec(tree: DocumentTree): LogEntry {
+  const exported = buildAuditedExport(tree);
+  const url = URL.createObjectURL(new Blob([exported.markdown], { type: "text/markdown;charset=utf-8" }));
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = EXPORT_FILENAME;
+  document.body.append(anchor);
+  anchor.click();
+  anchor.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  return stamp({
+    title: "System.Export",
+    body: `Downloaded ${EXPORT_FILENAME}: ${exported.nodeCount} node(s), ${exported.flagCount} flag row(s).`,
+  });
+}
+
 /** Adds the advisory review after a Spec.Audit run. The deterministic flags are already in the log. */
 async function appendAiReview(markdown: string, report: string): Promise<void> {
   const result = await reviewAudit(markdown, report);
@@ -310,12 +332,16 @@ export function dispatchLine(line: string, options: { commandId?: string; source
   }
   queue = queue.then(async () => {
     const before = state.wb;
-    const next = await runLine(before, trimmed, BUILTIN_REGISTRY);
+    let next = await runLine(before, trimmed, BUILTIN_REGISTRY);
     const entry = next.log.at(-1);
     if (entry) loggedAt.set(entry, Date.now());
     const auditRan = splitPipeline(trimmed).includes("Spec.Audit");
     if (auditRan && entry && !entry.error && isLlmConfigured()) {
       void appendAiReview(serializeTree(next.history.present), entry.body);
+    }
+    const exportRan = splitPipeline(trimmed).includes("System.Export");
+    if (exportRan && entry && !entry.error) {
+      next = { ...next, log: [...next.log, downloadAuditedSpec(next.history.present)] };
     }
     const affected = entry ? coordsIn(entry.body, next.history.present) : [];
     nonce += 1;

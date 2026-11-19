@@ -153,12 +153,22 @@ export const docInjectFlaw: CommandHandler = (ctx) => {
   };
 };
 
-export const systemExport: CommandHandler = (ctx) => {
-  const flagsById = computeAuditFlags(ctx.tree);
-  const body = flattenNodes(ctx.tree)
+/**
+ * Audited Markdown: every node preceded by its § anchor, then an Audit Summary table.
+ * Pure. Shared by the System.Export log entry and the browser file download.
+ */
+export interface AuditedExport {
+  markdown: string;
+  nodeCount: number;
+  flagCount: number;
+}
+
+export function buildAuditedExport(tree: DocumentTree): AuditedExport {
+  const flagsById = computeAuditFlags(tree);
+  const body = flattenNodes(tree)
     .map((node) => `<!-- ${node.coordinate} -->\n${node.rawText}`)
     .join("\n\n");
-  const rows = flattenNodes(applyFlags(ctx.tree, flagsById)).flatMap((node) =>
+  const rows = flattenNodes(applyFlags(tree, flagsById)).flatMap((node) =>
     node.flags.map(
       (flag) =>
         `| ${node.coordinate} | ${flag.type} | ${flag.message.replace(/\|/g, "\\|")} |`,
@@ -168,7 +178,15 @@ export const systemExport: CommandHandler = (ctx) => {
     rows.length > 0
       ? ["## Audit Summary", "", "| Coordinate | Flag | Message |", "| --- | --- | --- |", ...rows].join("\n")
       : "## Audit Summary\n\nNo flags.";
-  return noChange(ctx.tree, "System.Export", `${body}\n\n${summary}`);
+  return {
+    markdown: `${body}\n\n${summary}\n`,
+    nodeCount: flattenNodes(tree).length,
+    flagCount: rows.length,
+  };
+}
+
+export const systemExport: CommandHandler = (ctx) => {
+  return noChange(ctx.tree, "System.Export", buildAuditedExport(ctx.tree).markdown);
 };
 
 const BUILTIN_ENTRIES: readonly CommandEntry[] = [

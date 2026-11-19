@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "augeron": {
+      "command": "node",
+      "args": ["packages/mcp-server/dist/index.js"],
+      "disabled": false,
+      "autoApprove": [
+        "augeron_parse_document",
+        "augeron_project_viewspec",
+        "augeron_run_pipeline",
+        "augeron_verify_audit"
+      ]
+    }
+  }
+}

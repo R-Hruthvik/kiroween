@@ -13,7 +13,7 @@ export {
   type WorkbenchState,
   type LogEntry,
 } from "./oberon/registry.js";
-export { BUILTIN_REGISTRY } from "./oberon/commands.js";
+export { BUILTIN_REGISTRY, buildAuditedExport, type AuditedExport } from "./oberon/commands.js";
 export { createHistory, commit, undo, redo, replacePresent, type History } from "./history/stack.js";
 export { detectContradictions } from "./analyzers/contradiction.js";
 export { tightenText } from "./analyzers/tightener.js";
