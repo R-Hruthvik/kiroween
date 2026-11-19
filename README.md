@@ -77,7 +77,7 @@ This project was built with Kiro as a spec-driven workflow. The repository keeps
 - **`.kiro/steering/`:** `product.md` (zero-menu UX and scope), `architecture.md` (package boundaries and the deterministic-fallback rule), and `oberon-nls-grammar.md` (the `§` coordinate and command token grammar).
 - **`.kiro/hooks/verify-invariants.json`:** a PostFileSave hook. Saving a file in `packages/core/src` runs the fast-check invariant suite.
 - **`.kiro/skills/`:** `augeron-ui-gate` (checks React changes against the UI rules) and `kiroween-preflight` (checks repo structure and submission readiness).
-- **`.kiro/settings/mcp.json`:** registers the local `augeron` stdio server. This file is not yet committed. Once it is, Kiro can call the four MCP tools directly.
+- **`.kiro/settings/mcp.json`:** registers the local `augeron` stdio server. Kiro starts it from the repo root with `node packages/mcp-server/dist/index.js`, which needs `npm run build` first. `kiro-cli` 3.5.0 loads it and calls `augeron_verify_audit`.
 
 ## License
 
