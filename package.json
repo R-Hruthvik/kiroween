@@ -1,0 +1,16 @@
+{
+  "name": "augeron",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Augeron: an NLS View-Spec and Oberon text-as-command workbench for reviewing AI-generated specs.",
+  "license": "MIT",
+  "workspaces": [
+    "packages/core",
+    "packages/web",
+    "packages/mcp-server"
+  ],
+  "scripts": {
+    "test": "npm --workspace=packages/core run test",
+    "test:pbt": "npm --workspace=packages/core run test:pbt"
+  }
+}

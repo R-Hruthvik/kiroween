@@ -1,0 +1,15 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "verify-core-invariants",
+      "description": "Executes fast-check PBT invariants whenever packages/core/src files are saved.",
+      "trigger": "PostFileSave",
+      "matcher": "packages/core/src/.*\\.ts$",
+      "action": {
+        "type": "command",
+        "command": "npm --workspace=packages/core run test:pbt"
+      }
+    }
+  ]
+}
