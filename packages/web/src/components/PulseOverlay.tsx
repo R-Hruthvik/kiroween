@@ -1,10 +1,11 @@
 import { useEffect, useState, type JSX } from "react";
-import { useWorkbench } from "../state/useWorkbenchStore";
+import { useWorkbench, type PulseTone } from "../state/useWorkbenchStore";
 
 const PULSE_MS = 350;
 
 interface Beam {
   key: number;
+  tone: PulseTone;
   x1: number;
   y1: number;
   x2: number;
@@ -16,8 +17,14 @@ function centerOf(element: Element): { x: number; y: number } {
   return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
 }
 
+function prefersReducedMotion(): boolean {
+  return window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+}
+
 /**
- * Draws a 350ms beam from the primary target node to the invoked command token.
+ * Draws a 350ms beam from the primary target node to the invoked command token. The tone colors it:
+ * crimson after an injected flaw or a contradiction, teal after Spec.Tighten, amber otherwise.
+ * With prefers-reduced-motion it draws nothing; the node highlight still marks what changed.
  * Coordinates are looked up by data attribute, so the overlay needs no props. It ignores pointer events.
  */
 export function PulseOverlay(): JSX.Element | null {
@@ -25,7 +32,7 @@ export function PulseOverlay(): JSX.Element | null {
   const [beam, setBeam] = useState<Beam | null>(null);
 
   useEffect(() => {
-    if (!pulse || !pulse.commandId) return;
+    if (!pulse || !pulse.commandId || prefersReducedMotion()) return;
     const source = pulse.source
       ? document.querySelector(`[data-coord=${JSON.stringify(pulse.source)}]`)
       : null;
@@ -33,7 +40,7 @@ export function PulseOverlay(): JSX.Element | null {
     if (!source || !target) return;
     const from = centerOf(source);
     const to = centerOf(target);
-    setBeam({ key: pulse.nonce, x1: from.x, y1: from.y, x2: to.x, y2: to.y });
+    setBeam({ key: pulse.nonce, tone: pulse.tone, x1: from.x, y1: from.y, x2: to.x, y2: to.y });
     const timer = window.setTimeout(() => setBeam(null), PULSE_MS);
     return () => window.clearTimeout(timer);
   }, [pulse]);
@@ -42,7 +49,7 @@ export function PulseOverlay(): JSX.Element | null {
   return (
     <svg
       key={beam.key}
-      className="pulse-overlay"
+      className={`pulse-overlay pulse-overlay--${beam.tone}`}
       width="100%"
       height="100%"
       aria-hidden="true"

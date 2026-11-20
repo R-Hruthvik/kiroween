@@ -44,9 +44,8 @@ export interface WorkbenchState {
 export const WELCOME_ENTRY: LogEntry = {
   title: "Augeron",
   body:
-    "Run any Module.Action token with a click. Chain commands with ->. " +
-    "Commands: View.Spec(a|h|f|u|r), Spec.Audit, Spec.Tighten, Cite.Verify, " +
-    "Outline.ExtractTasks, Doc.InjectFlaw, System.Undo, System.Redo, System.ClearLog, System.Export.",
+    "Augeron reads a spec by § address and treats command text as live controls. " +
+    "Middle-click or Ctrl/Cmd-click any command in the pad on the right to run it.",
 };
 
 export function createWorkbenchState(tree: DocumentTree): WorkbenchState {
@@ -127,6 +126,21 @@ async function runStage(
     },
     section: `### ${outcome.logTitle}\n${outcome.logBody}`,
   };
+}
+
+/**
+ * Returns the normalized pipeline when `line` is two or more registered commands joined by "->",
+ * otherwise null. Prose that happens to contain "->", or a chain with an unregistered stage, is not
+ * a pipeline, so callers can fall back to running a single token.
+ */
+export function asPipeline(line: string, registry: CommandRegistry): string | null {
+  const stages = splitPipeline(line);
+  if (stages.length < 2) return null;
+  for (const stage of stages) {
+    const command = parseCommand(stage);
+    if (!command || !registry.has(`${command.module}.${command.action}`)) return null;
+  }
+  return stages.join(" -> ");
 }
 
 /**

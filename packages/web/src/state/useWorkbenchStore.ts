@@ -1,13 +1,16 @@
 import { useSyncExternalStore } from "react";
 import {
   BUILTIN_REGISTRY,
+  applyFlags,
   commit,
+  computeAuditFlags,
   coordinatesMentioned,
   createWorkbenchState,
   flattenNodes,
   parseDocument,
   buildAuditedExport,
   rebuildDocument,
+  replacePresent,
   runLine,
   serializeTree,
   splitPipeline,
@@ -17,14 +20,27 @@ import {
 } from "@augeron/core";
 import { FIXTURES, isFixtureName } from "../fixtures";
 import { isLlmConfigured, llmEndpoint, reviewAudit, setLlmKey } from "../adapters/optionalLlmAdapter";
+import { THEMES, applyTheme, isThemeName } from "../theme";
 
 const STORAGE_KEY = "augeron.workbench.v1";
 const HIGHLIGHT_MS = 1200;
 const UI_ONLY_ACTIONS = new Set(["Edit.Source", "Edit.Done"]);
+/** Commands the web layer handles itself, outside the core registry. */
+const WEB_ONLY_TOKENS = ["Doc.Load", "AI.Config", "Edit.Source", "Edit.Done", "View.Theme"] as const;
+const RUNNABLE_TOKENS: ReadonlySet<string> = new Set([...BUILTIN_REGISTRY.keys(), ...WEB_ONLY_TOKENS]);
+
+/** True when `Module.Action` names a command that can actually run, so other text never renders as a button. */
+export function isRunnableToken(moduleAction: string): boolean {
+  return RUNNABLE_TOKENS.has(moduleAction);
+}
 const LOAD_TOKEN = /^Doc\.Load\(([^)]*)\)$/;
 const CONFIG_TOKEN = /^AI\.Config\(([^)]*)\)$/;
 const CONFIG_ARG = /AI\.Config\([^)]*\)/g;
+const THEME_TOKEN = /^View\.Theme\(([^)]*)\)$/;
 export const EXPORT_FILENAME = "augeron-audited-spec.md";
+
+/** Pulse color: crimson for injected flaws or contradictions, teal for rewrites, amber otherwise. */
+export type PulseTone = "default" | "danger" | "tighten";
 
 export interface Pulse {
   /** Coordinate of the primary target node, or null when nothing is selected. */
@@ -33,6 +49,7 @@ export interface Pulse {
   commandId: string | null;
   /** Coordinates that the command output mentions. */
   affected: string[];
+  tone: PulseTone;
   nonce: number;
 }
 
@@ -47,6 +64,11 @@ export interface UiState {
   /** Text of the System.Tool pad. */
   toolText: string;
   pulse: Pulse | null;
+  /**
+   * True once Spec.Audit has run on the current document. While true, text-changing commands
+   * re-apply the audit so flag strips do not silently disappear. Doc.Load resets it.
+   */
+  auditActive: boolean;
   /** Coordinates highlighted after a command. Cleared after HIGHLIGHT_MS. */
   highlight: ReadonlySet<string>;
 }
@@ -66,6 +88,7 @@ export const DEFAULT_TOOL_TEXT = [
   "Cite.Verify -> View.Spec(u)",
   "Doc.InjectFlaw -> Spec.Audit -> Outline.ExtractTasks",
   "Doc.Load(rfc)  Doc.Load(brief)  Doc.Load(prd)",
+  "View.Theme(exhumed)  View.Theme(paper)",
   "System.Undo  System.Redo  System.Export  System.ClearLog",
 ].join("\n");
 
@@ -119,6 +142,7 @@ function initialState(): UiState {
     sourceDraft: "",
     toolText: saved?.toolText ?? DEFAULT_TOOL_TEXT,
     pulse: null,
+    auditActive: false,
     highlight: EMPTY_HIGHLIGHT,
   };
 }
@@ -173,6 +197,42 @@ export function setSelection(nodeIds: string[], selectedText: string): void {
   setState({ wb: { ...wb, selectedNodeIds: nodeIds, selectedText } });
 }
 
+/** Clears the node selection and any browser text selection, so commands act on the full document. */
+export function clearSelection(): void {
+  window.getSelection()?.removeAllRanges();
+  setSelection([], "");
+}
+
+/**
+ * Node ids are positional, so after a structural change an old id can name a different paragraph.
+ * Keeps the selection only when every selected id still sits at the same coordinate.
+ */
+function revalidateSelection(before: DocumentTree, after: WorkbenchState): WorkbenchState {
+  if (after.selectedNodeIds.length === 0) return after;
+  const stable = after.selectedNodeIds.every((id) => {
+    const was = coordOfNodeId(before, id);
+    return was !== null && was === coordOfNodeId(after.history.present, id);
+  });
+  return stable ? after : { ...after, selectedNodeIds: [], selectedText: "" };
+}
+
+/**
+ * True when the tree carries flags that only Spec.Audit sets. Parsing sets BROKEN_REF and
+ * UNVERIFIED_CLAIM itself, so those don't count. This catches a flagged snapshot that System.Undo
+ * restored after Doc.Load reset auditActive.
+ */
+function hasAuditFlags(tree: DocumentTree): boolean {
+  return flattenNodes(tree).some((node) =>
+    node.flags.some((flag) => flag.type === "CONTRADICTION" || flag.type === "AMBIGUOUS_TERM"),
+  );
+}
+
+/** Re-applies the full audit to the present tree without adding a history snapshot. */
+function reaudit(history: WorkbenchState["history"]): WorkbenchState["history"] {
+  const tree = history.present;
+  return replacePresent(history, applyFlags(tree, computeAuditFlags(tree)));
+}
+
 export function setToolText(text: string): void {
   setState({ toolText: text });
 }
@@ -204,11 +264,20 @@ export function setSourceDraft(text: string): void {
   setState({ sourceDraft: text });
 }
 
-/** Re-parses the edited Markdown through core and records one history snapshot. */
+/**
+ * Re-parses the edited Markdown through core and records one history snapshot.
+ * The selection is cleared because re-parsing reassigns positional node ids.
+ */
 export function finishSourceEdit(): void {
   if (!state.sourceEdit) return;
   const next = rebuildDocument(state.wb.history.present, state.sourceDraft);
-  const wb: WorkbenchState = { ...state.wb, history: commit(state.wb.history, next) };
+  const committed = commit(state.wb.history, next);
+  const wb: WorkbenchState = {
+    ...state.wb,
+    history: state.auditActive || hasAuditFlags(state.wb.history.present) ? reaudit(committed) : committed,
+    selectedNodeIds: [],
+    selectedText: "",
+  };
   const entry: LogEntry = {
     title: "Edit.Done",
     body: `Re-parsed ${flattenNodes(next).length} node(s).`,
@@ -224,6 +293,13 @@ export function finishSourceEdit(): void {
 
 export function cancelSourceEdit(): void {
   setState({ sourceEdit: false, sourceDraft: "" });
+}
+
+function pulseTone(line: string, body: string): PulseTone {
+  const stages = splitPipeline(line);
+  if (stages.includes("Doc.InjectFlaw") || body.includes("[CONTRADICTION]")) return "danger";
+  if (stages.includes("Spec.Tighten")) return "tighten";
+  return "default";
 }
 
 function primaryTargetCoord(wb: WorkbenchState): string | null {
@@ -265,6 +341,7 @@ function loadFixture(arg: string): void {
     splitCoord: null,
     sourceEdit: false,
     sourceDraft: "",
+    auditActive: false,
     highlight: EMPTY_HIGHLIGHT,
   });
 }
@@ -282,7 +359,15 @@ function configureAi(arg: string): void {
  * Saves the audited Markdown as a browser download. Returns the confirmation entry for System.Log.
  * The Blob is revoked after a short delay so the download can start.
  */
-function downloadAuditedSpec(tree: DocumentTree): LogEntry {
+function formatBytes(bytes: number): string {
+  return bytes < 1024 ? `${bytes} B` : `${(bytes / 1024).toFixed(1)} KB`;
+}
+
+/**
+ * Downloads the audited Markdown and returns a short receipt for System.Log. Core's System.Export
+ * puts the whole document into the log body; the web log shows this receipt in its place.
+ */
+function downloadAuditedSpec(tree: DocumentTree): { markdown: string; receipt: string } {
   const exported = buildAuditedExport(tree);
   const url = URL.createObjectURL(new Blob([exported.markdown], { type: "text/markdown;charset=utf-8" }));
   const anchor = document.createElement("a");
@@ -292,10 +377,25 @@ function downloadAuditedSpec(tree: DocumentTree): LogEntry {
   anchor.click();
   anchor.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
-  return stamp({
-    title: "System.Export",
-    body: `Downloaded ${EXPORT_FILENAME}: ${exported.nodeCount} node(s), ${exported.flagCount} flag row(s).`,
-  });
+  const bytes = new TextEncoder().encode(exported.markdown).length;
+  return {
+    markdown: exported.markdown,
+    receipt: [
+      `Downloaded ${EXPORT_FILENAME}`,
+      `${exported.nodeCount} nodes · ${exported.flagCount} flag rows · ${formatBytes(bytes)}`,
+    ].join("\n"),
+  };
+}
+
+/** Sets the theme by text command. Logs a short confirmation, or an error for an unknown name. */
+function setThemeCommand(arg: string): void {
+  const title = `View.Theme(${arg})`;
+  if (!isThemeName(arg)) {
+    appendLog(stamp({ title, body: "", error: `View.Theme expects ${THEMES.join(" or ")}. Got "${arg}".` }));
+    return;
+  }
+  applyTheme(arg);
+  appendLog(stamp({ title, body: `Theme: ${arg}. Saved for your next visit.` }));
 }
 
 /** Adds the advisory review after a Spec.Audit run. The deterministic flags are already in the log. */
@@ -324,6 +424,12 @@ export function dispatchLine(line: string, options: { commandId?: string; source
     queue = queue.then(() => loadFixture(arg));
     return queue;
   }
+  const theme = THEME_TOKEN.exec(trimmed);
+  if (theme) {
+    const arg = (theme[1] ?? "").trim();
+    queue = queue.then(() => setThemeCommand(arg));
+    return queue;
+  }
   const config = CONFIG_TOKEN.exec(trimmed);
   if (config) {
     const arg = (config[1] ?? "").trim();
@@ -336,22 +442,46 @@ export function dispatchLine(line: string, options: { commandId?: string; source
     const entry = next.log.at(-1);
     if (entry) loggedAt.set(entry, Date.now());
     const auditRan = splitPipeline(trimmed).includes("Spec.Audit");
+    // A later stage can fail after Spec.Audit already applied its flags, so look for its section.
+    const auditApplied = entry !== undefined && entry.body.includes("### Spec.Audit\n");
+    const auditActive = state.auditActive || auditApplied || hasAuditFlags(before.history.present);
+    const textChanged =
+      next.history.present !== before.history.present &&
+      serializeTree(next.history.present) !== serializeTree(before.history.present);
+    if (auditActive && textChanged) {
+      next = { ...next, history: reaudit(next.history) };
+    }
+    next = revalidateSelection(before.history.present, next);
     if (auditRan && entry && !entry.error && isLlmConfigured()) {
       void appendAiReview(serializeTree(next.history.present), entry.body);
     }
-    const exportRan = splitPipeline(trimmed).includes("System.Export");
-    if (exportRan && entry && !entry.error) {
-      next = { ...next, log: [...next.log, downloadAuditedSpec(next.history.present)] };
+    const stages = splitPipeline(trimmed);
+    const exportAt = stages.indexOf("System.Export");
+    if (exportAt >= 0 && entry) {
+      // Export the tree as it was at the System.Export stage, not after later stages. Core is pure
+      // and deterministic, so re-running the stages up to the export reproduces that tree exactly.
+      const upTo = exportAt === stages.length - 1 ? next : await runLine(before, stages.slice(0, exportAt + 1).join(" -> "), BUILTIN_REGISTRY);
+      const exportEntry = upTo.log.at(-1);
+      if (exportEntry && !exportEntry.error) {
+        const { markdown, receipt } = downloadAuditedSpec(upTo.history.present);
+        const full = `### System.Export\n${markdown}`;
+        if (entry.body.includes(full)) {
+          const compact = stamp({ ...entry, body: entry.body.replace(full, `### System.Export\n${receipt}`) });
+          next = { ...next, log: [...next.log.slice(0, -1), compact] };
+        }
+      }
     }
     const affected = entry ? coordsIn(entry.body, next.history.present) : [];
     nonce += 1;
     const source = options.sourceCoord ?? primaryTargetCoord(next);
     setState({
       wb: next,
+      auditActive,
       pulse: {
         source,
         commandId: options.commandId ?? null,
         affected,
+        tone: pulseTone(trimmed, next.log.at(-1)?.body ?? ""),
         nonce,
       },
       highlight: affected.length > 0 ? new Set(affected) : state.highlight,

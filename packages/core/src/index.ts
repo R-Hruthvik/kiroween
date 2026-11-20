@@ -5,6 +5,7 @@ export { letterSuffix, REF_PATTERN, COORDINATE_PATTERN, coordinatesMentioned } f
 export { projectTree, countProjected, flattenProjected, isVisible } from "./viewspec/projector.js";
 export { parseCommand, formatCommand, scanCommandTokens, splitPipeline } from "./oberon/tokenizer.js";
 export {
+  asPipeline,
   createRegistry,
   createWorkbenchState,
   runLine,

@@ -191,9 +191,9 @@ export const systemExport: CommandHandler = (ctx) => {
 
 const BUILTIN_ENTRIES: readonly CommandEntry[] = [
   { token: "View.Spec", mutatesTree: false, scope: "Full Doc", description: "Switch the View-Spec filter.", handler: viewSpec },
-  { token: "Spec.Audit", mutatesTree: false, scope: "Selection or Full Doc", description: "Flag contradictions, broken references, unverified claims, and vague terms.", handler: specAudit },
-  { token: "Spec.Tighten", mutatesTree: true, scope: "Selected Node(s)", description: "Strip filler and rewrite passive phrasing as EARS.", handler: specTighten },
-  { token: "Cite.Verify", mutatesTree: false, scope: "Selection or Full Doc", description: "Check § references and citations.", handler: citeVerify },
+  { token: "Spec.Audit", mutatesTree: false, scope: "Full Doc", description: "Flag contradictions, broken references, unverified claims, and vague terms.", handler: specAudit },
+  { token: "Spec.Tighten", mutatesTree: true, scope: "Selection or Full Doc", description: "Strip filler and rewrite passive phrasing as EARS.", handler: specTighten },
+  { token: "Cite.Verify", mutatesTree: false, scope: "Full Doc", description: "Check § references and citations.", handler: citeVerify },
   { token: "Outline.ExtractTasks", mutatesTree: false, scope: "Selection or Full Doc", description: "Extract a prioritized task checklist.", handler: outlineExtractTasks },
   { token: "Doc.InjectFlaw", mutatesTree: true, scope: "Full Doc", description: "Demo helper: inject a conflict and a broken reference.", handler: docInjectFlaw },
   { token: "System.Undo", mutatesTree: true, scope: "History Stack", description: "Restore the previous snapshot.", control: "undo" },

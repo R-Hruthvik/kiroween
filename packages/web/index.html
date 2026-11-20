@@ -4,6 +4,16 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Augeron</title>
+    <script>
+      // Apply the saved theme before first paint so a reload never flashes the other theme.
+      // Mirrors src/theme.ts (key "augeron.theme", default "exhumed").
+      try {
+        var t = localStorage.getItem("augeron.theme");
+        document.documentElement.dataset.theme = t === "paper" || t === "exhumed" ? t : "exhumed";
+      } catch (e) {
+        document.documentElement.dataset.theme = "exhumed";
+      }
+    </script>
     <link rel="icon" href="data:," />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />

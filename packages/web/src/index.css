@@ -1,7 +1,37 @@
-@import "tailwindcss";
+/*
+ * Design tokens. See .kiro/specs/augeron-workbench/ui-design.md section 1.
+ * Two themes, set by data-theme on <html> through the View.Theme(name) command:
+ *   exhumed (default): "Nocturnal Archival Exhumation", a dark archive. No glow, scanlines, or CRT effects.
+ *   paper: warm ivory editorial.
+ * Every text pair meets WCAG AA (4.5:1) in both themes.
+ */
+:root,
+:root[data-theme="exhumed"] {
+  --bg-paper: #0e1015;
+  --bg-track: #151922;
+  --ink-primary: #ede7db;
+  --ink-muted: #9ca3b4;
+  --border-hairline: #272e3d;
+  --cmd-bg: #231c10;
+  --cmd-ink: #fbbf24;
+  --cmd-underline: #d97706;
+  --scope-accent: #2dd4bf;
+  --scope-bg: #102427;
+  --danger-bg: #2a1216;
+  --danger-bar: #ef4444;
+  --danger-ink: #f87171;
+  --caution-bg: #261e0f;
+  --caution-bar: #f59e0b;
+  --caution-ink: #fcd34d;
+  --pulse-default: #f59e0b;
+  --pulse-danger: #ef4444;
+  --pulse-tighten: #2dd4bf;
+  --focus-ring: #2dd4bf;
 
-/* Design tokens from .kiro/specs/augeron-workbench/ui-design.md section 1. Flat paper, hairlines, no shadows. */
-:root {
+  color-scheme: dark;
+}
+
+:root[data-theme="paper"] {
   --bg-paper: #faf9f6;
   --bg-track: #f3f1ec;
   --ink-primary: #141413;
@@ -10,22 +40,70 @@
   --cmd-bg: #eef2ff;
   --cmd-ink: #3730a3;
   --cmd-underline: #6366f1;
-  --accent-amber: #d97706;
+  --scope-accent: #0f766e;
+  --scope-bg: #f0fdfa;
   --danger-bg: #fef2f2;
   --danger-bar: #dc2626;
   --danger-ink: #991b1b;
   --caution-bg: #fffbeb;
   --caution-bar: #d97706;
   --caution-ink: #92400e;
-
-  --font-prose: "Newsreader", "Source Serif 4", Georgia, serif;
-  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --pulse-default: #d97706;
+  --pulse-danger: #dc2626;
+  --pulse-tighten: #0f766e;
+  --focus-ring: #0f766e;
 
   color-scheme: light;
 }
 
-* {
+:root {
+  --font-prose: "Newsreader", "Source Serif 4", Georgia, serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+/* Minimal reset (replaces the Tailwind preflight that was imported but never used for utilities). */
+*,
+*::before,
+*::after {
   box-sizing: border-box;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+p,
+pre {
+  margin: 0;
+}
+
+button,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+/* Monospace panes must not turn "<!--", "->", or "!=" into ligature glyphs. */
+.pane-header,
+.tool-pane,
+.log-pane,
+.cmd-token,
+.coord-ref,
+.node__gutter,
+.node__role,
+.flag-strip,
+.doc-source__area,
+.doc-colophon,
+kbd {
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0, "calt" 0;
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
 }
 
 html,
@@ -40,6 +118,7 @@ body,
 
 body {
   font-family: var(--font-prose);
+  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -214,6 +293,17 @@ kbd {
   padding: 1.5rem 2rem 4rem;
 }
 
+/* Archival colophon: names the lineage (NLS 1968, Oberon 1986). Quiet, small caps, not a banner. */
+.doc-colophon {
+  padding: 0.35rem 2rem;
+  border-bottom: 1px solid var(--border-hairline);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.18em;
+  color: var(--ink-muted);
+  background: var(--bg-paper);
+}
+
 .doc-empty {
   font-family: var(--font-mono);
   font-size: 12.5px;
@@ -230,34 +320,44 @@ kbd {
   margin-top: 1.1rem;
 }
 
-.node--depth-1 .node__text--heading {
-  font-size: 1.45rem;
+.node__text--heading {
   font-weight: 600;
+  line-height: 1.3;
+}
+
+.node--depth-1 .node__text--heading {
+  font-size: 1.6rem;
 }
 
 .node--depth-2 .node__text--heading {
-  font-size: 1.2rem;
-  font-weight: 600;
+  font-size: 1.3rem;
 }
 
 .node--depth-3 .node__text--heading {
-  font-size: 1.02rem;
-  font-weight: 600;
+  font-size: 1.1rem;
 }
 
 .node__row {
+  border-radius: 2px;
   display: grid;
   grid-template-columns: 4.5rem minmax(0, 1fr) 4.2rem;
   gap: 0.75rem;
   align-items: start;
 }
 
+/* § gutter badge: an etched index marker. Tabular figures keep coordinates aligned. */
 .node__gutter {
+  justify-self: start;
   font-family: var(--font-mono);
-  font-size: 11.5px;
-  font-variant-numeric: tabular-nums;
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums slashed-zero;
+  letter-spacing: 0.02em;
   color: var(--ink-muted);
-  padding-top: 0.45rem;
+  margin-top: 0.45rem;
+  padding: 0 0.3em;
+  border: 1px solid var(--border-hairline);
+  border-radius: 2px;
+  line-height: 1.5;
 }
 
 .node__body {
@@ -267,15 +367,17 @@ kbd {
 .node__text {
   margin: 0;
   font-family: var(--font-prose);
-  font-size: 17px;
+  font-size: 18px;
+  font-weight: 400;
   line-height: 1.65;
-  max-width: 68ch;
+  max-width: 66ch;
   padding: 0.1rem 0;
 }
 
 .node__role {
   font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-size: 11.5px;
+  text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--ink-muted);
   padding-top: 0.5rem;
@@ -288,9 +390,32 @@ kbd {
   border-left: 1px solid var(--border-hairline);
 }
 
-.node--selected {
-  border-left: 2px solid var(--accent-amber);
-  padding-left: 0.4rem;
+/* Selection uses the scope accent (Spectral Teal in exhumed, deep teal in paper), so it never reads
+   as an amber caution flag. Only the node's own row is marked, which matches the scope: a selected
+   heading does not include its children. */
+.node--selected > .node__row {
+  background: var(--scope-bg);
+  box-shadow: inset 3px 0 0 var(--scope-accent);
+}
+
+.doc-scope {
+  color: var(--ink-muted);
+}
+
+.doc-scope--active {
+  color: var(--scope-accent);
+  font-weight: 600;
+}
+
+.pane-hint--nudge {
+  color: var(--cmd-ink);
+  background: var(--cmd-bg);
+  padding: 0 0.4em;
+  border-radius: 2px;
+}
+
+.cmd-token--chain {
+  border-bottom-style: solid;
 }
 
 .node--highlight {
@@ -438,7 +563,8 @@ kbd {
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
-  padding: 0.6rem 1rem 1.5rem;
+  padding: 0.6rem 1rem 3rem;
+  scroll-padding-bottom: 3rem;
   font-family: var(--font-mono);
   font-size: 13px;
 }
@@ -549,8 +675,20 @@ kbd {
   z-index: 50;
 }
 
+.pulse-overlay {
+  --pulse-color: var(--pulse-default);
+}
+
+.pulse-overlay--danger {
+  --pulse-color: var(--pulse-danger);
+}
+
+.pulse-overlay--tighten {
+  --pulse-color: var(--pulse-tighten);
+}
+
 .pulse-beam {
-  stroke: var(--accent-amber);
+  stroke: var(--pulse-color);
   stroke-width: 2;
   stroke-linecap: round;
   stroke-dasharray: 400;
@@ -560,7 +698,7 @@ kbd {
 
 .pulse-ring {
   fill: none;
-  stroke: var(--accent-amber);
+  stroke: var(--pulse-color);
   stroke-width: 1.5;
   transform-box: fill-box;
   transform-origin: center;
@@ -585,10 +723,8 @@ kbd {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .pulse-beam,
-  .pulse-ring {
-    animation: none;
-    stroke-dashoffset: 0;
+  .pulse-overlay {
+    display: none;
   }
   .node {
     transition: none;

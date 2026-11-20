@@ -1,6 +1,6 @@
 import type { MouseEvent, KeyboardEvent, ReactNode, JSX } from "react";
-import { REF_PATTERN, scanCommandTokens } from "@augeron/core";
-import { dispatchLine, lineAt, openSplit } from "../state/useWorkbenchStore";
+import { BUILTIN_REGISTRY, REF_PATTERN, asPipeline, scanCommandTokens } from "@augeron/core";
+import { dispatchLine, isRunnableToken, lineAt, openSplit } from "../state/useWorkbenchStore";
 
 interface Props {
   text: string;
@@ -8,18 +8,23 @@ interface Props {
   idPrefix: string;
   /** When true, a plain click dispatches the token. Used in System.Log. Other panes need Ctrl/Cmd or middle-click. */
   plainClickRuns: boolean;
+  /**
+   * When true, a token on a line made only of core commands joined by "->" runs the whole chain.
+   * Used in System.Tool only. Everywhere else a token runs alone. Web-only commands (Doc.Load,
+   * AI.Config, Edit.*) never form a chain, because core pipelines cannot run them.
+   */
+  pipelines?: boolean;
+  /** Called on a plain click that does not run the token, so the pane can show a hint. */
+  onPlainClick?: (command: string) => void;
   /** Coordinate of the node that owns this text, used as the pulse source. */
   sourceCoord?: string;
   className?: string;
 }
 
-/** Full line when it holds a "->" pipeline, otherwise the token alone. */
-function commandFor(text: string, tokenStart: number, tokenRaw: string): string {
-  const line = lineAt(text, tokenStart);
-  if (!line.includes("->")) return tokenRaw;
-  return scanCommandTokens(line)
-    .map((token) => token.raw)
-    .join(" -> ");
+/** The chain for an explicit System.Tool pipeline line, otherwise the token alone. */
+function commandFor(text: string, tokenStart: number, tokenRaw: string, pipelines: boolean): string {
+  if (!pipelines) return tokenRaw;
+  return asPipeline(lineAt(text, tokenStart), BUILTIN_REGISTRY) ?? tokenRaw;
 }
 
 interface Token {
@@ -29,11 +34,13 @@ interface Token {
 }
 
 function findSegments(text: string): Token[] {
-  const tokens: Token[] = scanCommandTokens(text).map((token) => ({
-    kind: "cmd" as const,
-    start: token.start,
-    raw: token.raw,
-  }));
+  const tokens: Token[] = scanCommandTokens(text)
+    .filter((token) => isRunnableToken(`${token.command.module}.${token.command.action}`))
+    .map((token) => ({
+      kind: "cmd" as const,
+      start: token.start,
+      raw: token.raw,
+    }));
   for (const match of text.matchAll(REF_PATTERN)) {
     if (match.index === undefined) continue;
     tokens.push({ kind: "coord", start: match.index, raw: match[0] });
@@ -43,10 +50,18 @@ function findSegments(text: string): Token[] {
 
 /**
  * Renders text with live Module.Action tokens and § coordinates.
- * Command tokens run on middle-click (button 1), or on Ctrl/Cmd-click, or on a plain click when plainClickRuns is set.
- * Coordinates open the split pane on click.
+ * Only registered commands become live tokens. They run on middle-click (button 1), on Ctrl/Cmd-click,
+ * or on a plain click when plainClickRuns is set. Coordinates open the split pane on click.
  */
-export function OberonTextRenderer({ text, idPrefix, plainClickRuns, sourceCoord, className }: Props): JSX.Element {
+export function OberonTextRenderer({
+  text,
+  idPrefix,
+  plainClickRuns,
+  pipelines = false,
+  onPlainClick,
+  sourceCoord,
+  className,
+}: Props): JSX.Element {
   const segments = findSegments(text);
   const nodes: ReactNode[] = [];
   let cursor = 0;
@@ -58,7 +73,8 @@ export function OberonTextRenderer({ text, idPrefix, plainClickRuns, sourceCoord
 
     if (segment.kind === "cmd") {
       const commandId = `${idPrefix}-${index}`;
-      const command = commandFor(text, segment.start, segment.raw);
+      const command = commandFor(text, segment.start, segment.raw, pipelines);
+      const isChain = command !== segment.raw;
       const run = (): void => {
         void dispatchLine(command, { commandId, sourceCoord });
       };
@@ -76,8 +92,11 @@ export function OberonTextRenderer({ text, idPrefix, plainClickRuns, sourceCoord
         if (event.metaKey || event.ctrlKey || plainClickRuns) {
           event.stopPropagation();
           run();
+          return;
         }
+        onPlainClick?.(command);
       };
+      const how = plainClickRuns ? "Click" : "Middle-click or Ctrl/Cmd-click";
       const onKeyDown = (event: KeyboardEvent<HTMLSpanElement>): void => {
         if (event.key === "Enter") run();
       };
@@ -87,8 +106,8 @@ export function OberonTextRenderer({ text, idPrefix, plainClickRuns, sourceCoord
           role="button"
           tabIndex={0}
           data-cmd-id={commandId}
-          title={`Middle-click or Ctrl/Cmd-click to run ${command}`}
-          className="cmd-token"
+          title={isChain ? `${how} to run the chain ${command}` : `${how} to run ${command}`}
+          className={isChain ? "cmd-token cmd-token--chain" : "cmd-token"}
           onMouseDown={onMouseDown}
           onAuxClick={onAuxClick}
           onClick={onClick}

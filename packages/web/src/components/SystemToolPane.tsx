@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type JSX, type MouseEvent } from "react";
 import { setToolText, useWorkbench } from "../state/useWorkbenchStore";
 import { OberonTextRenderer } from "./OberonTextRenderer";
+import { usePaneNudge } from "./usePaneNudge";
 
 /**
  * System.Tool is a plain-text command pad with two modes. The rendered mode keeps every token live.
@@ -10,6 +11,7 @@ export function SystemToolPane(): JSX.Element {
   const text = useWorkbench((s) => s.toolText);
   const [editing, setEditing] = useState(false);
   const areaRef = useRef<HTMLTextAreaElement | null>(null);
+  const { nudge, showNudge } = usePaneNudge();
 
   useEffect(() => {
     if (editing) areaRef.current?.focus();
@@ -25,7 +27,9 @@ export function SystemToolPane(): JSX.Element {
     <div className="tool-pane">
       <header className="pane-header">
         <span className="pane-title">System.Tool</span>
-        <span className="pane-hint">middle-click or Ctrl/Cmd-click a command</span>
+        <span className={nudge ? "pane-hint pane-hint--nudge" : "pane-hint"} role="status" aria-live="polite">
+          {nudge ?? "middle-click or Ctrl/Cmd-click a command · a chain line runs as one pipeline"}
+        </span>
       </header>
       {editing ? (
         <textarea
@@ -42,7 +46,14 @@ export function SystemToolPane(): JSX.Element {
         />
       ) : (
         <div className="tool-pane__rendered" onClick={onRenderedClick} role="presentation">
-          <OberonTextRenderer text={text} idPrefix="tool" plainClickRuns={false} className="tool-pane__text" />
+          <OberonTextRenderer
+            text={text}
+            idPrefix="tool"
+            plainClickRuns={false}
+            pipelines={true}
+            onPlainClick={showNudge}
+            className="tool-pane__text"
+          />
         </div>
       )}
     </div>

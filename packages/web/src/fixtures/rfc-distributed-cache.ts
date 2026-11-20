@@ -1,6 +1,7 @@
 /**
  * Default demo document. Its coordinates and flags are checked by hand:
  * - §2.1b (p99 under 50 ms) conflicts with §4.3a (p99 is 200 ms): CONTRADICTION.
+ * - §2.1c links to §4.3a, so the split pane can be opened before any audit runs.
  * - §4.2a (retention under 30 days) conflicts with §4.3b (retention is 90 days): CONTRADICTION.
  * - §4.3c references §2.2c, which does not exist: BROKEN_REF.
  * - §3.1a and §3.1b hold filler and passive phrasing for Spec.Tighten.
@@ -23,6 +24,8 @@ It is worth noting that the design is basically simple and very scalable.
 Reads are served from the nearest healthy replica, and misses fall through to origin.
 
 The edge tier SHALL keep p99 read latency under 50 ms for cached objects.
+
+Measured load-test latency for this path is reported in §4.3a.
 
 ## Write path
 

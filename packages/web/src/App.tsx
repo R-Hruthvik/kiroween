@@ -5,7 +5,7 @@ import { PulseOverlay } from "./components/PulseOverlay";
 import { SystemLogPane } from "./components/SystemLogPane";
 import { SystemToolPane } from "./components/SystemToolPane";
 import { TrackLayout } from "./components/TrackLayout";
-import { dispatchLine, useWorkbench } from "./state/useWorkbenchStore";
+import { clearSelection, dispatchLine, useWorkbench } from "./state/useWorkbenchStore";
 
 const VIEW_KEYS = new Set(["a", "h", "f", "u", "r"]);
 
@@ -22,6 +22,10 @@ export function App(): JSX.Element {
     const onKey = (event: KeyboardEvent): void => {
       if (event.metaKey || event.ctrlKey || event.altKey) return;
       if (isTyping(event.target) || isTyping(document.activeElement)) return;
+      if (event.key === "Escape") {
+        clearSelection();
+        return;
+      }
       if (VIEW_KEYS.has(event.key)) {
         void dispatchLine(`View.Spec(${event.key})`);
       }
