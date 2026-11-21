@@ -7,7 +7,7 @@ import type {
 } from "../types.js";
 import { flattenNodes } from "../ast/flatten.js";
 import { appendMarkdown, parseDocument, rebuildDocument } from "../ast/parser.js";
-import { brokenRefFlags } from "../ast/classifier.js";
+import { brokenRefFlags, isCodeFence } from "../ast/classifier.js";
 import { projectTree, countProjected } from "../viewspec/projector.js";
 import { applyFlags, citeVerifyFlags, computeAuditFlags } from "../analyzers/audit.js";
 import { tightenText } from "../analyzers/tightener.js";
@@ -76,7 +76,9 @@ export const specTighten: CommandHandler = (ctx) => {
   const scope = ctx.selectedNodeIds.length > 0 ? new Set(ctx.selectedNodeIds) : null;
   const changed: string[] = [];
   const texts = flattenNodes(ctx.tree).map((node) => {
-    if (node.role === "Heading" || (scope && !scope.has(node.id))) return node.rawText;
+    const skip =
+      node.role === "Heading" || isCodeFence(node.rawText) || (scope !== null && !scope.has(node.id));
+    if (skip) return node.rawText;
     const next = tightenText(node.rawText);
     if (next !== node.rawText) changed.push(node.coordinate);
     return next;
@@ -120,15 +122,16 @@ export const outlineExtractTasks: CommandHandler = (ctx) => {
  * existing coordinates, but a new node can take the coordinate of an existing dangling reference,
  * which removes that BROKEN_REF flag. The command counts D dangling reference occurrences and
  * injects K = floor(D/2) + 1 copies of a "under 50 ms" requirement next to one "at 200 ms"
- * requirement. That gives 2K contradiction flags. The broken-reference flag adds 1 more, and at
- * most D flags can be removed, so the net count rises by at least 2K + 1 - D >= 3 on every input.
+ * requirement. Each copy gets one flag from the anchor, and the anchor gets one per copy up to the
+ * per-node cap. The broken-reference flag adds 1 more, and at most D flags can be removed, so the
+ * net count rises by at least K + min(K, cap) + 1 - D. K = D + 1 keeps that above zero for any D.
  */
 function injectFlawMarkdown(tree: DocumentTree): { markdown: string; target: string } {
   const danglingOccurrences = flattenNodes(tree).reduce(
     (sum, node) => sum + brokenRefFlags(node.rawText, tree.indexByCoord).length,
     0,
   );
-  const copies = Math.floor(danglingOccurrences / 2) + 1;
+  const copies = danglingOccurrences + 1;
   for (let attempt = 0; ; attempt += 1) {
     // The target must not exist after injection. Each try has a different candidate, so this ends.
     const target = `§${99 + attempt}.99z`;

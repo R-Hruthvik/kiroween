@@ -1,6 +1,38 @@
-import type { DocumentTree } from "../types.js";
+import type { DocNode, DocumentTree, FlagType } from "../types.js";
 import { flattenNodes } from "../ast/flatten.js";
+import { claimOf, splitSentences } from "../ast/classifier.js";
 import { computeAuditFlags } from "./audit.js";
+import { hasConflictTerm } from "./contradiction.js";
+import { vagueTermsIn } from "./vague.js";
+
+const EXCERPT_ORDER: readonly FlagType[] = ["CONTRADICTION", "BROKEN_REF", "UNVERIFIED_CLAIM", "AMBIGUOUS_TERM"];
+
+function sentenceMatches(sentence: string, type: FlagType, node: DocNode, related: ReadonlySet<string>): boolean {
+  switch (type) {
+    case "CONTRADICTION":
+      return hasConflictTerm(sentence);
+    case "BROKEN_REF":
+      return [...related].some((ref) => sentence.includes(ref)) || /\[[^\]]+\]/.test(sentence);
+    case "UNVERIFIED_CLAIM":
+      return claimOf(sentence) !== null && node.citations.length === 0;
+    case "AMBIGUOUS_TERM":
+      return vagueTermsIn(sentence).length > 0;
+  }
+}
+
+/**
+ * The sentence that triggered the node's flags, so the checklist does not show an unrelated opening
+ * sentence. Falls back to the first sentence when no sentence matches.
+ */
+export function flaggedExcerpt(node: DocNode, flagTypes: ReadonlySet<FlagType>, related: ReadonlySet<string>): string {
+  const sentences = splitSentences(node.rawText);
+  for (const type of EXCERPT_ORDER) {
+    if (!flagTypes.has(type)) continue;
+    const hit = sentences.find((sentence) => sentenceMatches(sentence, type, node, related));
+    if (hit !== undefined) return hit;
+  }
+  return node.firstSentence;
+}
 
 /**
  * Builds a prioritized Markdown checklist of Requirement nodes and flagged nodes.
@@ -23,15 +55,19 @@ export function buildTaskChecklist(tree: DocumentTree, scopeIds?: ReadonlySet<st
           : item.node.role === "Requirement"
             ? 1
             : 2;
-      return { ...item, priority, types: [...types] };
+      const related = new Set(
+        item.flags.flatMap((flag) => (flag.relatedCoordinate ? [flag.relatedCoordinate] : [])),
+      );
+      return { ...item, priority, types: [...types], related };
     })
     .sort((a, b) => a.priority - b.priority || a.order - b.order);
 
   if (items.length === 0) return "No requirements or flagged nodes found.";
   return items
-    .map(({ node, priority, types }) => {
+    .map(({ node, priority, types, related }) => {
       const suffix = types.length > 0 ? ` (${types.join(", ")})` : "";
-      return `- [ ] **P${priority}** ${node.coordinate} ${node.firstSentence}${suffix}`;
+      const excerpt = flaggedExcerpt(node, new Set(types), related);
+      return `- [ ] **P${priority}** ${node.coordinate} ${excerpt}${suffix}`;
     })
     .join("\n");
 }

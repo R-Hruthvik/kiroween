@@ -6,8 +6,9 @@ const REF_SOURCE = String.raw`§(?:0[a-z]+|[1-9]\d*(?:\.[1-9]\d*)*[a-z]*)(?!\.?\
 
 export const REF_PATTERN = new RegExp(REF_SOURCE, "g");
 
+// Numeric [1], standards keys such as [RFC2616] or [RFC 2616], URLs, and § references.
 export const CITATION_PATTERN = new RegExp(
-  String.raw`\[\d+\]|https?:\/\/[^\s)\]]+|` + REF_SOURCE,
+  String.raw`\[\d+\]|\[[A-Za-z][A-Za-z]*[- ]?\d[\w.-]*\]|https?:\/\/[^\s)\]]+|` + REF_SOURCE,
   "g",
 );
 

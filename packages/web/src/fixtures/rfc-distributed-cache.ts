@@ -2,7 +2,7 @@
  * Default demo document. Its coordinates and flags are checked by hand:
  * - §2.1b (p99 under 50 ms) conflicts with §4.3a (p99 is 200 ms): CONTRADICTION.
  * - §2.1c links to §4.3a, so the split pane can be opened before any audit runs.
- * - §4.2a (retention under 30 days) conflicts with §4.3b (retention is 90 days): CONTRADICTION.
+ * - §4.2a (personal data retention under 30 days) conflicts with §4.3b (personal data retention is 90 days): CONTRADICTION.
  * - §4.3c references §2.2c, which does not exist: BROKEN_REF.
  * - §3.1a and §3.1b hold filler and passive phrasing for Spec.Tighten.
  * - §1.1b and §3.2b use "fast" or "scalable" for Spec.Audit's AMBIGUOUS_TERM.
@@ -61,7 +61,7 @@ Access to cached records is limited to on-call staff.
 
 P99 cache read latency is 200 ms under load.
 
-Request log retention is 90 days for all cached requests.
+Personal data retention is 90 days for all cached requests.
 
 Latency figures are summarized in §2.2c.
 
