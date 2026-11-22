@@ -13,7 +13,7 @@
     "build": "npm --workspace=packages/core run build && npm --workspace=packages/web run build && npm --workspace=packages/mcp-server run build",
     "dev": "npm --workspace=packages/core run build && npm --workspace=packages/web run dev",
     "start:mcp": "npm --workspace=packages/mcp-server run start",
-    "test": "npm --workspace=packages/core run test",
+    "test": "npm run test --workspaces --if-present",
     "test:pbt": "npm --workspace=packages/core run test:pbt"
   }
 }
