@@ -80,6 +80,7 @@ export const loggedAt = new WeakMap<LogEntry, number>();
 
 export const DEFAULT_TOOL_TEXT = [
   "View.Spec(a)  View.Spec(h)  View.Spec(f)  View.Spec(u)  View.Spec(r)",
+  "View.Level(1)  View.Level(2)",
   "Spec.Audit",
   "Spec.Tighten",
   "Cite.Verify",

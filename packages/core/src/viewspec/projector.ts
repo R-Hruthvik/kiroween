@@ -51,10 +51,31 @@ export function countProjected(nodes: readonly ProjectedNode[]): number {
   return flattenProjected(nodes).length;
 }
 
-function projectNodes(nodes: readonly DocNode[], code: ViewSpecCode): ProjectedNode[] {
+/**
+ * Level of a node for View.Level clipping. A heading's level is its depth. A body node takes the
+ * level of the heading that owns it, because the parser gives body nodes depth = parent + 1, which
+ * is not their heading level. Text before the first heading has level 0 and is never clipped.
+ */
+function levelOf(node: DocNode, ownerLevel: number): number {
+  return node.role === "Heading" ? node.depth : ownerLevel;
+}
+
+/**
+ * `level` is the optional View.Level clip. A node whose level is deeper than `level` is removed
+ * with its whole subtree, as in NLS level clipping, and its children are not promoted. The clip
+ * runs before the view predicate, so the result is the intersection of the two filters.
+ */
+function projectNodes(
+  nodes: readonly DocNode[],
+  code: ViewSpecCode,
+  level: number | undefined,
+  ownerLevel: number,
+): ProjectedNode[] {
   const out: ProjectedNode[] = [];
   for (const node of nodes) {
-    const children = projectNodes(node.children, code);
+    const nodeLevel = levelOf(node, ownerLevel);
+    if (level !== undefined && nodeLevel > level) continue;
+    const children = projectNodes(node.children, code, level, nodeLevel);
     if (!isVisible(node, code)) {
       out.push(...children);
       continue;
@@ -72,6 +93,10 @@ function projectNodes(nodes: readonly DocNode[], code: ViewSpecCode): ProjectedN
   return out;
 }
 
-export function projectTree(tree: DocumentTree, code: ViewSpecCode): ProjectedNode[] {
-  return projectNodes(tree.rootNodes, code);
+/**
+ * Projects the tree under a view code and an optional View.Level clip (a positive integer).
+ * Omit `level` for the view-only projection.
+ */
+export function projectTree(tree: DocumentTree, code: ViewSpecCode, level?: number): ProjectedNode[] {
+  return projectNodes(tree.rootNodes, code, level, 0);
 }

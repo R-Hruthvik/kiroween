@@ -56,16 +56,25 @@ export interface ParsedCommand {
   arg?: string;                // "u"
 }
 
+/**
+ * Heading depth limit set by View.Level(n). A positive integer. Undefined means no level clip.
+ * It is a separate projection dimension from ViewSpecCode, and it layers on top of the active view.
+ */
+export type LevelClip = number;
+
 export interface CommandContext {
   tree: DocumentTree;
   selectedNodeIds: string[];
   selectedText: string;
   activeViewSpec: ViewSpecCode;
+  activeLevel?: LevelClip;
 }
 
 export interface CommandOutcome {
   updatedTree: DocumentTree;
   nextViewSpec?: ViewSpecCode;
+  /** undefined keeps the current level clip, null clears it, a number sets it. */
+  nextLevel?: LevelClip | null;
   logTitle: string;
   logBody: string;
   affectedCoordinates: string[];

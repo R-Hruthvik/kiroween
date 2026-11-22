@@ -11,5 +11,11 @@ Before writing or finalizing any component in `packages/web/src/`:
 3. **Middle-Click & Selection Persistence:**
    - Attach `onMouseDown` (`e.button === 1` with `e.preventDefault()`) AND `onClick` (`e.metaKey || e.ctrlKey`) to every clickable `Module.Action` token.
    - Read target nodes from persisted `lastSelection` state so clicking `System.Tool` never loses the active selection in `NlsDocumentPane`.
-4. **Core Isolation:** Ensure zero DOM or React code leaks into `packages/core`. Check with `grep -rnE "from ['\"](react|react-dom)|\bwindow\b|\bdocument\b|node:fs" packages/core/src` and confirm there are no matches.
+4. **Core Isolation:** Ensure zero DOM, browser, React, or Node I/O code leaks into `packages/core`. Run this grep and confirm it prints nothing and exits 1:
+
+   ```bash
+   grep -rnE "from ['\"](react|react-dom)['\"]|\bwindow\.[A-Za-z_]|\bdocument\.([A-Za-z_]+\(|body\b|documentElement\b|head\b|location\b|cookie\b|title\b)|\bHTML[A-Za-z]*Element\b|\bfetch\(|\blocalStorage\b|\bsessionStorage\b|from ['\"](node:)?fs['\"]|\bXMLHttpRequest\b|\bnavigator\." packages/core/src
+   ```
+
+   The pattern matches code uses only. It skips the English word "document" in comments and strings. A bare `\bwindow\b` or `\bdocument\b` is not used, because it matches prose such as "the document" and fails on clean code. Any hit is a real violation: fix the import or API use in core, and do not weaken the grep.
 5. **Verification:** Run `npm --workspace=packages/web run build` and `npm test` before reporting completion. If `packages/web` has no build script yet, say so explicitly and do not report the build as passing.

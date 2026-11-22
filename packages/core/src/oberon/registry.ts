@@ -1,4 +1,4 @@
-import type { CommandContext, CommandHandler, DocumentTree, ViewSpecCode } from "../types.js";
+import type { CommandContext, CommandHandler, DocumentTree, LevelClip, ViewSpecCode } from "../types.js";
 import { commit, createHistory, redo, replacePresent, undo, type History } from "../history/stack.js";
 import { formatCommand, parseCommand, splitPipeline } from "./tokenizer.js";
 import type { ParsedCommand } from "../types.js";
@@ -35,6 +35,8 @@ export interface LogEntry {
 export interface WorkbenchState {
   readonly history: History<DocumentTree>;
   readonly activeViewSpec: ViewSpecCode;
+  /** View.Level clip. Undefined means every level is shown. */
+  readonly activeLevel?: LevelClip;
   readonly selectedNodeIds: readonly string[];
   readonly selectedText: string;
   readonly log: readonly LogEntry[];
@@ -103,6 +105,7 @@ async function runStage(
     selectedNodeIds: [...state.selectedNodeIds],
     selectedText: state.selectedText,
     activeViewSpec: state.activeViewSpec,
+    activeLevel: state.activeLevel,
   };
   const outcome = await entry.handler(ctx, command.arg);
 
@@ -123,6 +126,7 @@ async function runStage(
       ...state,
       history,
       activeViewSpec: outcome.nextViewSpec ?? state.activeViewSpec,
+      activeLevel: outcome.nextLevel === undefined ? state.activeLevel : (outcome.nextLevel ?? undefined),
     },
     section: `### ${outcome.logTitle}\n${outcome.logBody}`,
   };

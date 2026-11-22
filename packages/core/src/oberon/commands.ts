@@ -42,13 +42,53 @@ export const viewSpec: CommandHandler = (ctx, arg) => {
   if (!isViewCode(code)) {
     return failure(ctx.tree, title, `View.Spec expects one of a, h, f, u, r. Got "${code}".`);
   }
+  // View.Spec(a) is the full view, so it also clears any View.Level clip. Other codes keep it.
+  const level = code === "a" ? undefined : ctx.activeLevel;
   const total = flattenNodes(ctx.tree).length;
-  const visible = countProjected(projectTree(ctx.tree, code));
+  const visible = countProjected(projectTree(ctx.tree, code, level));
   return {
     ...noChange(ctx.tree, title, `Visible nodes: ${visible}. Hidden nodes: ${total - visible}.`),
     nextViewSpec: code,
+    nextLevel: code === "a" ? null : undefined,
   };
 };
+
+/** Accepts only digits that form a safe integer of at least 1. Rejects "", "0", "1.5", "-1", and "x". */
+function parseLevel(raw: string): number | null {
+  if (!/^[0-9]+$/.test(raw)) return null;
+  const level = Number(raw);
+  return Number.isSafeInteger(level) && level >= 1 ? level : null;
+}
+
+/**
+ * View.Level(n) clips the projection to heading depth n, as NLS level clipping does. A heading
+ * deeper than n is hidden with its whole subtree, and body text follows the heading that owns it.
+ * It layers on the active view code, so View.Level(1) -> View.Spec(u) shows unverified claims
+ * under level-1 headings only. View.Spec(a) clears the clip. Pure: it never changes the tree.
+ */
+export const viewLevel: CommandHandler = (ctx, arg) => {
+  const raw = arg ?? "";
+  const title = `View.Level(${raw})`;
+  const level = parseLevel(raw);
+  if (level === null) {
+    return failure(
+      ctx.tree,
+      title,
+      `View.Level expects a positive integer depth, for example View.Level(1). Got "${raw}".`,
+    );
+  }
+  const total = flattenNodes(ctx.tree).length;
+  const visible = countProjected(projectTree(ctx.tree, ctx.activeViewSpec, level));
+  return {
+    ...noChange(
+      ctx.tree,
+      title,
+      `Showing headings and body text down to level ${level}. Visible nodes: ${visible}. Hidden nodes: ${total - visible}.`,
+    ),
+    nextLevel: level,
+  };
+};
+
 
 export const specAudit: CommandHandler = (ctx) => {
   const flagsById = computeAuditFlags(ctx.tree);
@@ -193,7 +233,8 @@ export const systemExport: CommandHandler = (ctx) => {
 };
 
 const BUILTIN_ENTRIES: readonly CommandEntry[] = [
-  { token: "View.Spec", mutatesTree: false, scope: "Full Doc", description: "Switch the View-Spec filter.", handler: viewSpec },
+  { token: "View.Spec", mutatesTree: false, scope: "Full Doc", description: "Switch the View-Spec filter. View.Spec(a) also clears the View.Level clip.", handler: viewSpec },
+  { token: "View.Level", mutatesTree: false, scope: "Full Doc", description: "Clip the view to heading depth n, as NLS level clipping does. Combines with the active view code.", handler: viewLevel },
   { token: "Spec.Audit", mutatesTree: false, scope: "Full Doc", description: "Flag contradictions, broken references, unverified claims, and vague terms.", handler: specAudit },
   { token: "Spec.Tighten", mutatesTree: true, scope: "Selection or Full Doc", description: "Strip filler and rewrite passive phrasing as EARS.", handler: specTighten },
   { token: "Cite.Verify", mutatesTree: false, scope: "Full Doc", description: "Check § references and citations.", handler: citeVerify },

@@ -229,11 +229,12 @@ function countNodes(tree: DocumentTree): number {
 export function NlsDocumentPane(): JSX.Element {
   const tree = useWorkbench((s) => s.wb.history.present);
   const view = useWorkbench((s) => s.wb.activeViewSpec);
+  const level = useWorkbench((s) => s.wb.activeLevel);
   const selectedIds = useWorkbench((s) => s.wb.selectedNodeIds);
   const highlight = useWorkbench((s) => s.highlight);
   const sourceEdit = useWorkbench((s) => s.sourceEdit);
   const sourceDraft = useWorkbench((s) => s.sourceDraft);
-  const projected = projectTree(tree, view);
+  const projected = projectTree(tree, view, level);
 
   return (
     <div className="doc-pane">
@@ -261,7 +262,7 @@ export function NlsDocumentPane(): JSX.Element {
           >
             {scopeLabel(tree, selectedIds)}
           </span>{" "}
-          · {countNodes(tree)} nodes ·{" "}
+          {level !== undefined ? <>· level ≤ {level} </> : null}· {countNodes(tree)} nodes ·{" "}
           <OberonTextRenderer text="Edit.Source" idPrefix="doc-edit" plainClickRuns={true} />
         </span>
       </header>
@@ -301,6 +302,10 @@ export function NlsDocumentPane(): JSX.Element {
                 This document is empty. Run{" "}
                 <OberonTextRenderer text="Edit.Source" idPrefix="doc-empty-edit" plainClickRuns={true} /> to add
                 Markdown, or load a sample with Doc.Load in System.Tool.
+              </p>
+            ) : level !== undefined ? (
+              <p className="doc-empty">
+                Nothing at level ≤ {level}. Run <kbd>View.Spec(a)</kbd> to clear the level clip.
               </p>
             ) : view === "a" ? (
               <p className="doc-empty">Nothing to show.</p>
