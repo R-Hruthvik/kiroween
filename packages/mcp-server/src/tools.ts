@@ -35,11 +35,18 @@ export interface ToolResult {
 // ---------------------------------------------------------------------------
 
 /** Display hints for commands that take an argument. The registry has no argument metadata. */
-const ARG_HINTS: Readonly<Record<string, string>> = { "View.Spec": "(a|h|f|u|r)" };
+const ARG_HINTS: Readonly<Record<string, string>> = {
+  "View.Spec": "(a|h|f|u|r)",
+  "View.Brief": "(n)",
+  "Spec.Ledger": "(n)",
+  "Find.Look": "(text)",
+  "Link.Back": "(§x)",
+  "Help.Show": "(Module.Action)",
+};
 
 /** A command runs here when it has a handler. Control commands need browser history or log state. */
 function isServerCommand(entry: CommandEntry): boolean {
-  return entry.control === undefined && entry.handler !== undefined;
+  return entry.control === undefined && entry.handler !== undefined && !entry.needsWorkbench;
 }
 
 /** A command honors targetCoord when its catalog scope includes the selection. */
@@ -233,7 +240,7 @@ export async function executePipeline(
     const token = `${command.module}.${command.action}`;
     const entry = registry.get(token);
     if (!entry) return failValidation(`Unknown command: ${token}`);
-    if (entry.control !== undefined) {
+    if (entry.control !== undefined || entry.needsWorkbench) {
       return failValidation(`${token} is not available in augeron_run_pipeline. It needs browser history or log state.`);
     }
     if (!entry.handler) return failValidation(`${entry.token} has no handler.`);

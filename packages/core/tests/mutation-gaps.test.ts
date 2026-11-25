@@ -5,6 +5,7 @@ import {
   flattenProjected,
   createWorkbenchState,
   runLine,
+  pipelineError,
   createRegistry,
   BUILTIN_REGISTRY,
   type CommandEntry,
@@ -157,5 +158,24 @@ describe("M13: a failed pipeline stage stops the chain", () => {
     expect(after.history.present).toBe(before.history.present);
     expect(after.log.at(-1)?.body).not.toContain("later ran");
     expect(after.log.at(-1)?.error).toBe("boom");
+  });
+});
+
+describe("F2: an unknown stage refuses the whole line before any stage runs", () => {
+  it("runs nothing when a later stage is not a registered command, and reports the stage", async () => {
+    const before = createWorkbenchState(parseDocument("# A\n\nBody text.\n"));
+    const line = "View.Spec(h) -> Bogus.Stage";
+    expect(pipelineError(line, BUILTIN_REGISTRY)).toBe("Unknown command: Bogus.Stage");
+
+    const after = await runLine(before, line, BUILTIN_REGISTRY);
+    expect(after.activeViewSpec).toBe("a");
+    expect(after.history.present).toBe(before.history.present);
+    expect(after.log).toHaveLength(before.log.length + 1);
+    expect(after.log.at(-1)?.error).toBe("Unknown command: Bogus.Stage");
+    expect(after.log.at(-1)?.body).toBe("");
+  });
+
+  it("returns null for a line whose stages are all registered", () => {
+    expect(pipelineError("View.Spec(h) -> Spec.Audit", BUILTIN_REGISTRY)).toBeNull();
   });
 });

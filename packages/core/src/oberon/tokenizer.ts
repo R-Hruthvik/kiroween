@@ -49,3 +49,28 @@ export function scanCommandTokens(text: string): ScannedToken[] {
 export function splitPipeline(line: string): string[] {
   return line.split("->").map((stage) => stage.trim());
 }
+
+/**
+ * The line that Ctrl/Cmd+Enter runs, for a caret at `caret` in pad text. A "->" line runs whole, so core
+ * can refuse a bad stage. A line with one command runs that command. A line with several commands runs the
+ * one under the caret, or the nearest one before it. Returns null for blank lines, "#" group headings,
+ * and lines with no command.
+ */
+export function commandLineAt(text: string, caret: number): string | null {
+  const at = Math.min(Math.max(caret, 0), text.length);
+  const start = at === 0 ? 0 : text.lastIndexOf("\n", at - 1) + 1;
+  const newline = text.indexOf("\n", at);
+  const raw = text.slice(start, newline === -1 ? text.length : newline);
+  const trimmed = raw.trim();
+  if (trimmed.length === 0 || trimmed.startsWith("#")) return null;
+  if (trimmed.includes("->")) return trimmed;
+  const tokens = scanCommandTokens(raw);
+  const first = tokens[0];
+  if (first === undefined) return null;
+  if (tokens.length === 1) return first.raw;
+  const offset = at - start;
+  const under = tokens.find((token) => offset >= token.start && offset <= token.end);
+  if (under) return under.raw;
+  const before = tokens.filter((token) => token.start < offset).at(-1);
+  return (before ?? first).raw;
+}

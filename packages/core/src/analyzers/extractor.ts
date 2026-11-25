@@ -1,24 +1,10 @@
 import type { DocNode, DocumentTree, FlagType } from "../types.js";
 import { flattenNodes } from "../ast/flatten.js";
-import { claimOf, splitSentences } from "../ast/classifier.js";
+import { hasModalKeyword, isCodeFence, splitSentences } from "../ast/classifier.js";
 import { computeAuditFlags } from "./audit.js";
-import { hasConflictTerm } from "./contradiction.js";
-import { vagueTermsIn } from "./vague.js";
+import { sentenceMatches } from "./sentenceMatch.js";
 
 const EXCERPT_ORDER: readonly FlagType[] = ["CONTRADICTION", "BROKEN_REF", "UNVERIFIED_CLAIM", "AMBIGUOUS_TERM"];
-
-function sentenceMatches(sentence: string, type: FlagType, node: DocNode, related: ReadonlySet<string>): boolean {
-  switch (type) {
-    case "CONTRADICTION":
-      return hasConflictTerm(sentence);
-    case "BROKEN_REF":
-      return [...related].some((ref) => sentence.includes(ref)) || /\[[^\]]+\]/.test(sentence);
-    case "UNVERIFIED_CLAIM":
-      return claimOf(sentence) !== null && node.citations.length === 0;
-    case "AMBIGUOUS_TERM":
-      return vagueTermsIn(sentence).length > 0;
-  }
-}
 
 /**
  * The sentence that triggered the node's flags, so the checklist does not show an unrelated opening
@@ -37,6 +23,8 @@ export function flaggedExcerpt(node: DocNode, flagTypes: ReadonlySet<FlagType>, 
 /**
  * Builds a prioritized Markdown checklist of Requirement nodes and flagged nodes.
  * P0: CONTRADICTION or BROKEN_REF. P1: other Requirements. P2: other flagged nodes.
+ * Each sentence with a modal keyword gets its own line, so a paragraph with several requirements
+ * shows all of them. A node with no modal sentence shows its flagged sentence, as before.
  * Ties keep document order.
  */
 export function buildTaskChecklist(tree: DocumentTree, scopeIds?: ReadonlySet<string>): string {
@@ -63,11 +51,22 @@ export function buildTaskChecklist(tree: DocumentTree, scopeIds?: ReadonlySet<st
     .sort((a, b) => a.priority - b.priority || a.order - b.order);
 
   if (items.length === 0) return "No requirements or flagged nodes found.";
-  return items
-    .map(({ node, priority, types, related }) => {
+  const lines: string[] = [];
+  for (const { node, priority, types, related } of items) {
+    const modalSentences = isCodeFence(node.rawText)
+      ? []
+      : splitSentences(node.rawText).filter(hasModalKeyword);
+    if (modalSentences.length === 0) {
       const suffix = types.length > 0 ? ` (${types.join(", ")})` : "";
       const excerpt = flaggedExcerpt(node, new Set(types), related);
-      return `- [ ] **P${priority}** ${node.coordinate} ${excerpt}${suffix}`;
-    })
-    .join("\n");
+      lines.push(`- [ ] **P${priority}** ${node.coordinate} ${excerpt}${suffix}`);
+      continue;
+    }
+    for (const sentence of modalSentences) {
+      const matched = types.filter((type) => sentenceMatches(sentence, type, node, related));
+      const suffix = matched.length > 0 ? ` (${matched.join(", ")})` : "";
+      lines.push(`- [ ] **P${priority}** ${node.coordinate} ${sentence}${suffix}`);
+    }
+  }
+  return lines.join("\n");
 }

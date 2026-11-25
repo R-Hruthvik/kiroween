@@ -1,18 +1,24 @@
-import type { CommandContext, CommandHandler, DocumentTree, LevelClip, ViewSpecCode } from "../types.js";
+import type { CommandContext, CommandHandler, DocumentTree, LevelClip, ReviewMarks, RunOptions, ViewSpecCode } from "../types.js";
 import { commit, createHistory, redo, replacePresent, undo, type History } from "../history/stack.js";
 import { formatCommand, parseCommand, splitPipeline } from "./tokenizer.js";
 import type { ParsedCommand } from "../types.js";
 
-export type ControlOp = "undo" | "redo" | "clearLog";
+export type ControlOp = "undo" | "redo" | "clearLog" | "history";
 
 export interface CommandEntry {
   readonly token: string;
   readonly mutatesTree: boolean;
   readonly scope: string;
   readonly description: string;
+  /** What the argument means, for Help.Show, for example "one of a, h, f, u, r". Omitted when the command takes none. */
+  readonly argument?: string;
+  /** A working example token for Help.Show, for example "View.Spec(u)". Defaults to the bare token. */
+  readonly example?: string;
   readonly handler?: CommandHandler;
   /** History and log commands are handled by the dispatcher because they need state the handler cannot see. */
   readonly control?: ControlOp;
+  /** True when the command keeps state only the browser holds, such as review marks. The MCP server does not run it. */
+  readonly needsWorkbench?: boolean;
 }
 
 export type CommandRegistry = ReadonlyMap<string, CommandEntry>;
@@ -37,8 +43,14 @@ export interface WorkbenchState {
   readonly activeViewSpec: ViewSpecCode;
   /** View.Level clip. Undefined means every level is shown. */
   readonly activeLevel?: LevelClip;
+  /** View.Brief sentence count. Undefined means the brief is off. */
+  readonly activeBrief?: number;
   readonly selectedNodeIds: readonly string[];
   readonly selectedText: string;
+  /** Review marks by § address. Kept beside the history, so undo never touches them and the text never changes. */
+  readonly reviews: ReviewMarks;
+  /** Core commands that ran without error this session, one per entry, in the Module.Action(arg) form. System.History lists them. */
+  readonly commandHistory: readonly string[];
   readonly log: readonly LogEntry[];
   readonly welcome: LogEntry;
 }
@@ -56,6 +68,8 @@ export function createWorkbenchState(tree: DocumentTree): WorkbenchState {
     activeViewSpec: "a",
     selectedNodeIds: [],
     selectedText: "",
+    reviews: {},
+    commandHistory: [],
     log: [WELCOME_ENTRY],
     welcome: WELCOME_ENTRY,
   };
@@ -71,8 +85,15 @@ async function runStage(
   state: WorkbenchState,
   command: ParsedCommand,
   entry: CommandEntry,
+  padText: string | undefined,
 ): Promise<StageResult> {
   const title = formatCommand(command);
+
+  if (entry.control === "history") {
+    const body =
+      state.commandHistory.length === 0 ? "No commands have run this session." : state.commandHistory.join("\n");
+    return { state, section: `### ${title}\n${body}` };
+  }
 
   if (entry.control === "undo" || entry.control === "redo") {
     const history = entry.control === "undo" ? undo(state.history) : redo(state.history);
@@ -106,6 +127,9 @@ async function runStage(
     selectedText: state.selectedText,
     activeViewSpec: state.activeViewSpec,
     activeLevel: state.activeLevel,
+    activeBrief: state.activeBrief,
+    reviews: state.reviews,
+    padText,
   };
   const outcome = await entry.handler(ctx, command.arg);
 
@@ -127,6 +151,8 @@ async function runStage(
       history,
       activeViewSpec: outcome.nextViewSpec ?? state.activeViewSpec,
       activeLevel: outcome.nextLevel === undefined ? state.activeLevel : (outcome.nextLevel ?? undefined),
+      activeBrief: outcome.nextBrief === undefined ? state.activeBrief : (outcome.nextBrief ?? undefined),
+      reviews: outcome.nextReviews ?? state.reviews,
     },
     section: `### ${outcome.logTitle}\n${outcome.logBody}`,
   };
@@ -148,6 +174,32 @@ export function asPipeline(line: string, registry: CommandRegistry): string | nu
 }
 
 /**
+ * The first problem with a line's stages, or the resolved stages when every stage is a registered command.
+ * Nothing runs from this check, so callers can use it to refuse a whole line before any stage runs.
+ */
+export function checkPipeline(
+  line: string,
+  registry: CommandRegistry,
+): { error: string } | { stages: { command: ParsedCommand; entry: CommandEntry }[] } {
+  const stages: { command: ParsedCommand; entry: CommandEntry }[] = [];
+  for (const stage of splitPipeline(line)) {
+    const command = parseCommand(stage);
+    if (!command) return { error: `Not a command token: "${stage}"` };
+    const token = `${command.module}.${command.action}`;
+    const entry = registry.get(token);
+    if (!entry) return { error: `Unknown command: ${token}` };
+    stages.push({ command, entry });
+  }
+  return { stages };
+}
+
+/** The message for a line with a bad stage, or null when every stage is a registered command. */
+export function pipelineError(line: string, registry: CommandRegistry): string | null {
+  const checked = checkPipeline(line, registry);
+  return "error" in checked ? checked.error : null;
+}
+
+/**
  * Runs one line of Oberon text, which may hold a "->" pipeline.
  * Every stage is validated before any stage runs. Stages run left to right, and the first error stops the chain.
  * Output goes to one combined log entry.
@@ -156,32 +208,28 @@ export async function runLine(
   state: WorkbenchState,
   line: string,
   registry: CommandRegistry,
+  options: RunOptions = {},
 ): Promise<WorkbenchState> {
-  const fail = (message: string): WorkbenchState => ({
-    ...state,
-    log: [...state.log, { title: line.trim(), body: "", error: message }],
-  });
-
-  const stages: { command: ParsedCommand; entry: CommandEntry }[] = [];
-  for (const stage of splitPipeline(line)) {
-    const command = parseCommand(stage);
-    if (!command) return fail(`Not a command token: "${stage}"`);
-    const token = `${command.module}.${command.action}`;
-    const entry = registry.get(token);
-    if (!entry) return fail(`Unknown command: ${token}`);
-    stages.push({ command, entry });
+  const checked = checkPipeline(line, registry);
+  if ("error" in checked) {
+    return { ...state, log: [...state.log, { title: line.trim(), body: "", error: checked.error }] };
   }
+  const { stages } = checked;
 
   let current = state;
   const sections: string[] = [];
   let error: string | undefined;
   for (const { command, entry } of stages) {
-    const result = await runStage(current, command, entry);
+    const result = await runStage(current, command, entry, options.padText);
     current = result.state;
     sections.push(result.section);
     if (result.error) {
       error = result.error;
       break;
+    }
+    // Only core commands that succeed are recorded. System.History is not, so it never lists itself.
+    if (entry.control !== "history") {
+      current = { ...current, commandHistory: [...current.commandHistory, formatCommand(command)] };
     }
   }
 

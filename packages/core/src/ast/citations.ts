@@ -1,4 +1,5 @@
 import type { DocNode, NodeFlag } from "../types.js";
+import { withoutCodeAndLinkText } from "./markdown.js";
 
 // Bracketed citation keys: [1], [7], [RFC2616], [RFC 2616], [KEP-3157].
 export const BRACKET_KEY = /\[(\d+|[A-Za-z][A-Za-z]*[- ]?\d[\w.-]*)\]/g;
@@ -45,7 +46,7 @@ export function collectReferenceKeys(nodes: readonly DocNode[]): Set<string> {
 export function citationKeyFlags(text: string, keys: ReadonlySet<string>): NodeFlag[] {
   const seen = new Set<string>();
   const flags: NodeFlag[] = [];
-  for (const match of text.matchAll(BRACKET_KEY)) {
+  for (const match of withoutCodeAndLinkText(text).matchAll(BRACKET_KEY)) {
     const raw = match[1] ?? "";
     const key = normalizeKey(raw);
     if (seen.has(key)) continue;

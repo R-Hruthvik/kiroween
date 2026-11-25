@@ -1,4 +1,5 @@
 import type {
+  AddressExcerpt,
   CommandHandler,
   CommandOutcome,
   DocumentTree,
@@ -12,7 +13,13 @@ import { projectTree, countProjected } from "../viewspec/projector.js";
 import { applyFlags, citeVerifyFlags, computeAuditFlags } from "../analyzers/audit.js";
 import { tightenText } from "../analyzers/tightener.js";
 import { buildTaskChecklist } from "../analyzers/extractor.js";
+import { DEFAULT_BRIEF_SENTENCES, buildBrief, parseSentenceCount, renderBrief } from "../analyzers/brief.js";
+import { buildLedger, renderLedger } from "../analyzers/ledger.js";
 import { createRegistry, type CommandEntry, type CommandRegistry } from "./registry.js";
+import { COORDINATE_PATTERN } from "../ast/coordinate.js";
+import { reviewFingerprint } from "../review/marks.js";
+import { findLiteral, linksTo } from "../analyzers/lookup.js";
+import { BROWSER_TOKENS, checkToolText, renderToolCheck } from "./toolCheck.js";
 
 const VIEW_CODES: readonly ViewSpecCode[] = ["a", "h", "f", "u", "r"];
 
@@ -50,6 +57,8 @@ export const viewSpec: CommandHandler = (ctx, arg) => {
     ...noChange(ctx.tree, title, `Visible nodes: ${visible}. Hidden nodes: ${total - visible}.`),
     nextViewSpec: code,
     nextLevel: code === "a" ? null : undefined,
+    // A View-Spec replaces the brief, as it does for the level clip.
+    nextBrief: null,
   };
 };
 
@@ -86,7 +95,51 @@ export const viewLevel: CommandHandler = (ctx, arg) => {
       `Showing headings and body text down to level ${level}. Visible nodes: ${visible}. Hidden nodes: ${total - visible}.`,
     ),
     nextLevel: level,
+    // View.Level is a clip over the views, so it takes the screen back from the brief.
+    nextBrief: null,
   };
+};
+
+/**
+ * Parses the optional sentence count of View.Brief(n) and Spec.Ledger(n). No argument means the
+ * default of 2. An empty or invalid argument is an error, so "View.Brief()" never runs with a guess.
+ */
+function briefCount(command: string, arg: string | undefined): { count: number } | { error: string } {
+  if (arg === undefined) return { count: DEFAULT_BRIEF_SENTENCES };
+  const count = parseSentenceCount(arg);
+  if (count === null) {
+    return { error: `${command} expects a positive integer sentence count, for example ${command}(2). Got "${arg}".` };
+  }
+  return { count };
+}
+
+/**
+ * View.Brief(n) shows an excerpt: up to n whole sentences per section, chosen by RFC 2119 keywords,
+ * then numbers and definitions, then words shared with the heading. Each sentence shows its §
+ * address. It is a projection over the tree, so the text and the coordinates never change.
+ */
+export const viewBrief: CommandHandler = (ctx, arg) => {
+  const title = arg === undefined ? "View.Brief" : `View.Brief(${arg})`;
+  const parsed = briefCount("View.Brief", arg);
+  if ("error" in parsed) return failure(ctx.tree, title, parsed.error);
+  const brief = buildBrief(ctx.tree, parsed.count);
+  const kept = brief.sections.flatMap((section) => section.sentences.map((sentence) => sentence.coordinate));
+  return {
+    ...noChange(ctx.tree, title, renderBrief(brief)),
+    affectedCoordinates: [...new Set(kept)],
+    nextBrief: parsed.count,
+  };
+};
+
+/**
+ * Spec.Ledger lists every sentence with an RFC 2119 keyword. The optional argument is the brief
+ * sentence count that the coverage check uses. It defaults to 2, the same as View.Brief.
+ */
+export const specLedger: CommandHandler = (ctx, arg) => {
+  const title = arg === undefined ? "Spec.Ledger" : `Spec.Ledger(${arg})`;
+  const parsed = briefCount("Spec.Ledger", arg);
+  if ("error" in parsed) return failure(ctx.tree, title, parsed.error);
+  return noChange(ctx.tree, title, renderLedger(buildLedger(ctx.tree, parsed.count)));
 };
 
 
@@ -232,9 +285,142 @@ export const systemExport: CommandHandler = (ctx) => {
   return noChange(ctx.tree, "System.Export", buildAuditedExport(ctx.tree).markdown);
 };
 
+/**
+ * Review.Mark(§x) and Review.Clear(§x) change only the review marks, never the text. The mark stores the
+ * paragraph's fingerprint, so it stops counting when that paragraph changes.
+ */
+function reviewCommand(token: "Review.Mark" | "Review.Clear", mark: boolean): CommandHandler {
+  return (ctx, arg) => {
+    const coord = arg ?? "";
+    const title = `${token}(${coord})`;
+    if (!COORDINATE_PATTERN.test(coord)) {
+      return failure(ctx.tree, title, `${token} expects a § address such as §1.2a. Got "${coord}".`);
+    }
+    const node = flattenNodes(ctx.tree).find((candidate) => candidate.coordinate === coord);
+    if (node === undefined) return failure(ctx.tree, title, `No paragraph or heading at ${coord}.`);
+    const reviews: Record<string, string> = { ...ctx.reviews };
+    if (mark) {
+      reviews[coord] = reviewFingerprint(node.rawText);
+      return {
+        ...noChange(ctx.tree, title, `Marked ${coord} reviewed. The document text is unchanged.`),
+        nextReviews: reviews,
+      };
+    }
+    const had = Object.hasOwn(reviews, coord);
+    delete reviews[coord];
+    return {
+      ...noChange(
+        ctx.tree,
+        title,
+        had ? `Cleared the review mark on ${coord}. The document text is unchanged.` : `${coord} had no review mark.`,
+      ),
+      nextReviews: reviews,
+    };
+  };
+}
+
+const reviewMark = reviewCommand("Review.Mark", true);
+const reviewClear = reviewCommand("Review.Clear", false);
+
+/** One line per hit: the § address, then the excerpt. Used by Find.Look and Link.Back. */
+function formatHits(hits: readonly AddressExcerpt[]): string {
+  return hits.map((hit) => `- ${hit.coordinate}  ${hit.excerpt}`).join("\n");
+}
+
+/** Find.Look(text): a literal, case-insensitive search. Empty text is an error, so it never matches everything. */
+export const findLook: CommandHandler = (ctx, arg) => {
+  const title = arg === undefined ? "Find.Look" : `Find.Look(${arg})`;
+  const needle = (arg ?? "").trim();
+  if (needle === "") {
+    return failure(ctx.tree, title, "Find.Look expects the text to search for, for example Find.Look(retention).");
+  }
+  const hits = findLiteral(ctx.tree, needle);
+  const body =
+    hits.length === 0
+      ? `No paragraph or heading contains "${needle}".`
+      : `${hits.length} ${hits.length === 1 ? "match" : "matches"} for "${needle}".\n${formatHits(hits)}`;
+  return { ...noChange(ctx.tree, title, body), affectedCoordinates: hits.map((hit) => hit.coordinate) };
+};
+
+/** Link.Back(§x): every paragraph or heading whose text refers to §x. An address that does not exist is an error. */
+export const linkBack: CommandHandler = (ctx, arg) => {
+  const coordinate = arg ?? "";
+  const title = `Link.Back(${coordinate})`;
+  if (!COORDINATE_PATTERN.test(coordinate)) {
+    return failure(ctx.tree, title, `Link.Back expects a § address such as §1.2a. Got "${coordinate}".`);
+  }
+  if (!Object.hasOwn(ctx.tree.indexByCoord, coordinate)) {
+    return failure(ctx.tree, title, `No paragraph or heading at ${coordinate}.`);
+  }
+  const hits = linksTo(ctx.tree, coordinate);
+  const body =
+    hits.length === 0
+      ? `No paragraph refers to ${coordinate}.`
+      : `${hits.length} ${hits.length === 1 ? "paragraph refers" : "paragraphs refer"} to ${coordinate}.\n${formatHits(hits)}`;
+  return { ...noChange(ctx.tree, title, body), affectedCoordinates: hits.map((hit) => hit.coordinate) };
+};
+
+/** The full list for Help.Show with no argument, grouped by module in catalog order. */
+function helpList(): string {
+  const modules: string[] = [];
+  for (const entry of BUILTIN_ENTRIES) {
+    const module = entry.token.split(".")[0] ?? "";
+    if (!modules.includes(module)) modules.push(module);
+  }
+  const lines = ["Core commands, grouped by module. Help.Show(Module.Action) describes one."];
+  for (const module of modules) {
+    lines.push("", module);
+    for (const entry of BUILTIN_ENTRIES.filter((candidate) => candidate.token.startsWith(`${module}.`))) {
+      lines.push(`  ${entry.token}  ${entry.description} Mutates tree: ${entry.mutatesTree ? "yes" : "no"}.`);
+    }
+  }
+  lines.push("", `Browser only, not in this list: ${BROWSER_TOKENS.map((entry) => entry.token).join(", ")}.`);
+  return lines.join("\n");
+}
+
+/** The description of one command, for Help.Show(Module.Action). */
+function helpEntry(entry: CommandEntry): string {
+  return [
+    entry.token,
+    entry.description,
+    `Argument: ${entry.argument ?? "none"}.`,
+    `Mutates tree: ${entry.mutatesTree ? "yes" : "no"}.`,
+    `Scope: ${entry.scope}.`,
+    `Example: ${entry.example ?? entry.token}`,
+  ].join("\n");
+}
+
+/** Help.Show(Module.Action) or Help.Show for the full list. Takes the bare token, such as "View.Spec". */
+export const helpShow: CommandHandler = (ctx, arg) => {
+  const title = arg === undefined ? "Help.Show" : `Help.Show(${arg})`;
+  if (arg === undefined) return noChange(ctx.tree, title, helpList());
+  const name = arg.trim();
+  if (name === "") {
+    return failure(ctx.tree, title, "Help.Show expects Module.Action, for example Help.Show(View.Spec). With no argument it lists every command.");
+  }
+  const entry = BUILTIN_ENTRIES.find((candidate) => candidate.token === name);
+  if (entry === undefined) {
+    return failure(ctx.tree, title, `No core command named ${name}. Help.Show with no argument lists them all.`);
+  }
+  return noChange(ctx.tree, title, helpEntry(entry));
+};
+
+/** Tool.Check: checks the System.Tool pad. Only the browser knows the pad, so the MCP server does not run it. */
+export const toolCheck: CommandHandler = (ctx) => {
+  const title = "Tool.Check";
+  if (ctx.padText === undefined) {
+    return failure(ctx.tree, title, "Tool.Check reads the System.Tool pad, so it runs in the browser.");
+  }
+  return noChange(ctx.tree, title, renderToolCheck(checkToolText(ctx.padText, BUILTIN_REGISTRY)));
+};
+
 const BUILTIN_ENTRIES: readonly CommandEntry[] = [
-  { token: "View.Spec", mutatesTree: false, scope: "Full Doc", description: "Switch the View-Spec filter. View.Spec(a) also clears the View.Level clip.", handler: viewSpec },
-  { token: "View.Level", mutatesTree: false, scope: "Full Doc", description: "Clip the view to heading depth n, as NLS level clipping does. Combines with the active view code.", handler: viewLevel },
+  { token: "View.Spec", mutatesTree: false, scope: "Full Doc", argument: "one of a, h, f, u, r", example: "View.Spec(u)", description: "Switch the View-Spec filter. View.Spec(a) also clears the View.Level clip. Any View.Spec turns off View.Brief.", handler: viewSpec },
+  { token: "View.Level", mutatesTree: false, scope: "Full Doc", argument: "a positive heading depth n", example: "View.Level(1)", description: "Clip the view to heading depth n, as NLS level clipping does. Combines with the active view code. Turns off View.Brief.", handler: viewLevel },
+  { token: "View.Brief", mutatesTree: false, scope: "Full Doc", argument: "sentences per section n, default 2", example: "View.Brief(2)", description: "Excerpt view. Keeps up to n whole sentences per section (default 2), picked by RFC 2119 keyword, then numbers and definitions, then heading words. Each sentence shows its § address. Never changes the text.", handler: viewBrief },
+  { token: "Spec.Ledger", mutatesTree: false, scope: "Full Doc", argument: "sentences per section n, default 2", example: "Spec.Ledger(2)", description: "Lists every sentence with an RFC 2119 keyword: address, modal, condition, and whether View.Brief(n) keeps it. Never changes the text.", handler: specLedger },
+  { token: "Review.Mark", mutatesTree: false, scope: "Coordinate", argument: "a § address", example: "Review.Mark(§4.3a)", description: "Mark one § paragraph reviewed. The mark is kept outside the text and stops counting when that paragraph changes.", handler: reviewMark, needsWorkbench: true },
+  { token: "Review.Clear", mutatesTree: false, scope: "Coordinate", argument: "a § address", example: "Review.Clear(§4.3a)", description: "Remove the review mark from one § paragraph. The text is unchanged.", handler: reviewClear, needsWorkbench: true },
   { token: "Spec.Audit", mutatesTree: false, scope: "Full Doc", description: "Flag contradictions, broken references, unverified claims, and vague terms.", handler: specAudit },
   { token: "Spec.Tighten", mutatesTree: true, scope: "Selection or Full Doc", description: "Strip filler and rewrite passive phrasing as EARS.", handler: specTighten },
   { token: "Cite.Verify", mutatesTree: false, scope: "Full Doc", description: "Check § references and citations.", handler: citeVerify },
@@ -244,6 +430,11 @@ const BUILTIN_ENTRIES: readonly CommandEntry[] = [
   { token: "System.Redo", mutatesTree: true, scope: "History Stack", description: "Reapply the last undone snapshot.", control: "redo" },
   { token: "System.ClearLog", mutatesTree: false, scope: "System.Log", description: "Clear log entries, keeping the welcome block.", control: "clearLog" },
   { token: "System.Export", mutatesTree: false, scope: "Full Doc", description: "Export Markdown with § anchors and an audit summary.", handler: systemExport },
+  { token: "Find.Look", mutatesTree: false, scope: "Full Doc", argument: "the text to find, matched ignoring case", example: "Find.Look(retention)", description: "Acme-style Look. Lists every paragraph and heading that contains the text, with its § address and an excerpt. Never changes the text.", handler: findLook },
+  { token: "Link.Back", mutatesTree: false, scope: "Full Doc", argument: "a § address", example: "Link.Back(§4.3a)", description: "Lists every paragraph and heading that refers to the § address, with an excerpt. Never changes the text.", handler: linkBack },
+  { token: "Help.Show", mutatesTree: false, scope: "Command Catalog", argument: "a Module.Action token, or none for the full list", example: "Help.Show(Find.Look)", description: "Describes one command: what it does, its argument, whether it changes the tree, and an example. With no argument, lists every command by module.", handler: helpShow },
+  { token: "Tool.Check", mutatesTree: false, scope: "System.Tool pad", description: "Checks every line of the System.Tool pad. Each token and -> pipeline must parse and name a known command. Reports what each line reads and whether it changes the tree. Never runs the pad.", handler: toolCheck, needsWorkbench: true },
+  { token: "System.History", mutatesTree: false, scope: "System.Log", description: "Lists the core commands that ran this session, one per line. In the browser it also appends them to System.Tool as a block you can click to run again. Never changes the text.", control: "history", needsWorkbench: true },
 ];
 
 export const BUILTIN_REGISTRY: CommandRegistry = createRegistry(BUILTIN_ENTRIES);

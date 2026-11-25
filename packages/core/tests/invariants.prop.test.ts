@@ -13,6 +13,8 @@ import {
   BUILTIN_REGISTRY,
   flagCount,
   COORDINATE_PATTERN,
+  buildBrief,
+  buildLedger,
   type WorkbenchState,
 } from "../src/index.js";
 import type { ParsedCommand, ViewSpecCode } from "../src/types.js";
@@ -164,6 +166,42 @@ describe("INV-5 audit monotonicity under flaw injection", () => {
           BUILTIN_REGISTRY,
         );
         expect(countFlags(injected)).toBeGreaterThan(countFlags(base));
+      }),
+      { numRuns: RUNS },
+    );
+  });
+});
+
+describe("INV-1 extension: View.Brief and Spec.Ledger never change the tree", () => {
+  it("brief and ledger leave rawText, the node ids, and indexByCoord unchanged", async () => {
+    await fc.assert(
+      fc.asyncProperty(markdownArb, fc.integer({ min: 1, max: 4 }), async (md, n) => {
+        const tree = parseDocument(md);
+        const snapshot = JSON.parse(JSON.stringify(tree)) as typeof tree;
+        const brief = await runLine(createWorkbenchState(tree), `View.Brief(${n})`, BUILTIN_REGISTRY);
+        const ledger = await runLine(brief, "Spec.Ledger", BUILTIN_REGISTRY);
+        expect(ledger.history.present).toEqual(snapshot);
+        expect(flattenNodes(ledger.history.present).map((node) => node.rawText)).toEqual(
+          flattenNodes(tree).map((node) => node.rawText),
+        );
+        expect(ledger.history.present.indexByCoord).toEqual(tree.indexByCoord);
+        expect(ledger.history.past).toHaveLength(0);
+      }),
+      { numRuns: RUNS },
+    );
+  });
+});
+
+describe("Brief and ledger coverage", () => {
+  it("every ledger row is in the brief or listed as omitted, and every brief keyword sentence has a row", () => {
+    fc.assert(
+      fc.property(markdownArb, fc.integer({ min: 1, max: 4 }), (md, n) => {
+        const tree = parseDocument(md);
+        const report = buildLedger(tree, n);
+        expect(report.inBrief + report.omitted).toBe(report.rows.length);
+        expect(report.unaccounted).toBe(0);
+        expect(report.guardFailures).toEqual([]);
+        expect(buildBrief(tree, n).guardFailures).toEqual([]);
       }),
       { numRuns: RUNS },
     );

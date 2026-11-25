@@ -1,4 +1,6 @@
-// Deterministic filler removal and EARS rewrites. Numbers and § references are never touched.
+// Deterministic filler removal. Numbers, § and citation references, RFC 2119 keywords, and negations are never changed.
+import { isAbbreviationBefore } from "../ast/classifier.js";
+import { findProtectedChange } from "./protected.js";
 
 /** Removes or rewrites a phrase. Sentence-initial matches get a capitalized next word. */
 function rewritePhrase(text: string, phrase: string, replacement: string): string {
@@ -6,7 +8,9 @@ function rewritePhrase(text: string, phrase: string, replacement: string): strin
   const pattern = new RegExp(`(^|[.!?:;][ \\t]+|\\n[ \\t]*)?\\b(?:${phrase})[ \\t]+(\\S)`, "gi");
   return text.replace(pattern, (_match, lead: string | undefined, next: string, offset: number) => {
     // At offset 0 the optional lead group is undefined, so the start of the text counts as a sentence start.
-    const atStart = lead !== undefined || offset === 0;
+    // A dot after an abbreviation ("e.g. very large") does not start a sentence.
+    const afterAbbreviation = lead?.startsWith(".") === true && isAbbreviationBefore(text, offset);
+    const atStart = (lead !== undefined || offset === 0) && !afterAbbreviation;
     const prefix = lead ?? "";
     if (replacement === "") {
       return prefix + (atStart ? next.toUpperCase() : next);
@@ -16,21 +20,23 @@ function rewritePhrase(text: string, phrase: string, replacement: string): strin
   });
 }
 
-/** Ordered rules. Subject casing is kept from the source text, so "The system" stays "The system". */
+/** Ordered filler rules. They only delete or recase words. No rule may create or change a modal keyword. */
 const RULES: readonly ((text: string) => string)[] = [
   (text) => rewritePhrase(text, "it is (?:important|worth|useful) (?:to )?(?:note|noting|mention|mentioning) that", ""),
   (text) => rewritePhrase(text, "in order to", "to"),
   (text) => rewritePhrase(text, "basically,?", ""),
   (text) => rewritePhrase(text, "very", ""),
-  (text) => text.replace(/\b(the system) (?:should try to|should|will) /gi, "$1 SHALL "),
-  (text) => text.replace(/\b(\w+) is required to /gi, "$1 SHALL "),
 ];
 
-/** Returns the input unchanged when no rule applies, so no-op edits do not create history entries. */
+/**
+ * Returns the input unchanged when no rule applies, so no-op edits do not create history entries.
+ * A rule's rewrite is kept only if findProtectedChange finds no change against the original text.
+ */
 export function tightenText(text: string): string {
   let out = text;
   for (const rule of RULES) {
-    out = rule(out);
+    const next = rule(out);
+    if (next !== out && findProtectedChange(text, next) === null) out = next;
   }
   if (out === text || out.trim() === "") return text;
   // Collapse runs of spaces inside a line only. Line breaks stay as they are.

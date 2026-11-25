@@ -135,7 +135,9 @@ describe("augeron_run_pipeline matches core runLine", () => {
 describe("augeron_run_pipeline affectedCoordinates", () => {
   it("returns the nodes Cite.Verify flags, not every node in the log text", async () => {
     const { payload } = await pipeline("Cite.Verify");
-    expect(payload.affectedCoordinates).toEqual(["§1.1b", "§1.3b", "§1.3c"]);
+    // §1.1a, §1.2a, and §1.3a are Requirement nodes with an unscoped number and no citation, which
+    // the F6 per-sentence numeric check flags as UNVERIFIED_CLAIM. §1.1b, §1.3b, and §1.3c have BROKEN_REF.
+    expect(payload.affectedCoordinates).toEqual(["§1.1a", "§1.1b", "§1.2a", "§1.3a", "§1.3b", "§1.3c"]);
     const tree = (await pipeline("Cite.Verify", { includeTree: true })).payload.updatedTree as DocumentTree;
     expect(payload.affectedCoordinates).toEqual(coordinatesWithFlag(tree, ["BROKEN_REF", "UNVERIFIED_CLAIM"]));
   });
@@ -222,7 +224,7 @@ describe("augeron_run_pipeline invalid input", () => {
 
 describe("augeron_run_pipeline tool description", () => {
   const serverTokens = [...BUILTIN_REGISTRY.values()]
-    .filter((entry) => entry.control === undefined)
+    .filter((entry) => entry.control === undefined && !entry.needsWorkbench)
     .map((entry) => entry.token);
 
   it("lists every command that runs in this server, taken from the registry", () => {

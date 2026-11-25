@@ -1,10 +1,14 @@
 import type { DocNode, NodeFlag } from "../types.js";
-import { CURRENCY_PATTERN, QUANTITY_PATTERN, splitSentences } from "../ast/classifier.js";
+import { CURRENCY_PATTERN, quantityMatches, splitSentences } from "../ast/classifier.js";
 
 /** Caps CONTRADICTION flags on one node. Pairs are still scanned, so output stays bounded. */
 const MAX_CONTRADICTIONS_PER_NODE = 5;
 /** Content words kept on each side of a number or modal when naming the subject. */
 const WINDOW_TOKENS = 3;
+/** A clause with one of these words is scoped to a condition, so it is not a contradiction with an unscoped clause. */
+const SCOPE_PATTERN = /\b(?:if|when|unless|except)\b/i;
+/** Generic object words that appear in many unrelated sentences. They never count as the same object. */
+const GENERIC_OBJECTS = new Set(["header", "field", "response", "request", "server", "client", "message", "content"]);
 
 // Words that carry no subject meaning: modals, auxiliaries, prepositions, comparators, adverbs.
 const STOP = new Set([
@@ -27,8 +31,8 @@ const BOUNDARY = new Set([
 // Unit words end a window too, so an earlier quantity cannot leak into the next subject.
 const UNIT_WORDS = new Set([
   "ms", "s", "sec", "secs", "second", "seconds", "millisecond", "milliseconds", "min", "mins",
-  "minute", "minutes", "h", "hr", "hrs", "hour", "hours", "day", "days", "week", "weeks", "b", "kb",
-  "mb", "gb", "tb", "percent",
+  "minute", "minutes", "h", "hr", "hrs", "hour", "hours", "day", "days", "week", "weeks", "month",
+  "months", "year", "years", "b", "kb", "mb", "gb", "tb", "percent",
 ]);
 
 // Synonyms for the metric noun a requirement measures. Verb forms map to their noun.
@@ -84,9 +88,17 @@ function sameSubject(headA: string, qualsA: readonly string[], headB: string, qu
   return qualsA.some((qual) => qualsB.includes(qual));
 }
 
-function sameObject(a: readonly string[], b: readonly string[]): boolean {
-  if (a.length === 0 || b.length === 0) return true;
-  return a.some((word) => b.includes(word));
+/**
+ * Two clauses share an object when they have a non-generic object word in common. A clause with no object
+ * words at all matches any object, as before. A clause whose only object words are generic does not match.
+ */
+function sameObject(a: Polarity, b: Polarity): boolean {
+  if (!a.hasObjects || !b.hasObjects) return true;
+  return a.objects.some((word) => b.objects.includes(word));
+}
+
+function isScoped(entry: Entry): boolean {
+  return entry.kind === "metric" ? entry.metric.scoped : entry.polarity.scoped;
 }
 
 const LE_PATTERN = /\b(?:under|below|within|at most|no more than|less than|up to|fewer than|no greater than)\b|[<≤]/gi;
@@ -115,6 +127,15 @@ interface Metric {
   lo: number;
   hi: number;
   snippet: string;
+  scoped: boolean;
+}
+
+/** The sentence around a match, from the previous sentence break to the next one. */
+function sentenceAround(text: string, start: number, end: number): string {
+  const before = text.slice(0, start);
+  const lastBreak = Math.max(before.lastIndexOf("."), before.lastIndexOf("!"), before.lastIndexOf("?"), before.lastIndexOf("\n"));
+  const after = /[.!?\n]/.exec(text.slice(end));
+  return text.slice(lastBreak + 1, after ? end + after.index : text.length);
 }
 
 /** Converts a unit to a comparable class and a factor. Time is normalized to milliseconds. */
@@ -127,6 +148,9 @@ function unitOf(unit: string): { unitClass: string; factor: number } | null {
     case "h": case "hr": case "hrs": case "hour": case "hours": return { unitClass: "time", factor: 3_600_000 };
     case "day": case "days": return { unitClass: "time", factor: 86_400_000 };
     case "week": case "weeks": return { unitClass: "time", factor: 604_800_000 };
+    // A year is 365.25 days. A month is one twelfth of a year, about 30.44 days, so "12 months" equals "1 year".
+    case "month": case "months": return { unitClass: "time", factor: (365.25 * 86_400_000) / 12 };
+    case "year": case "years": return { unitClass: "time", factor: 365.25 * 86_400_000 };
     case "b": return { unitClass: "size", factor: 1 };
     case "kb": return { unitClass: "size", factor: 1024 };
     case "mb": return { unitClass: "size", factor: 1024 ** 2 };
@@ -145,7 +169,7 @@ function unitOf(unit: string): { unitClass: string; factor: number } | null {
 function extractMetrics(text: string): Metric[] {
   type Hit = { index: number; end: number; value: string; unit: string; symbol: string };
   const hits: Hit[] = [];
-  for (const match of text.matchAll(new RegExp(QUANTITY_PATTERN.source, "gi"))) {
+  for (const match of quantityMatches(text)) {
     hits.push({
       index: match.index ?? 0,
       end: (match.index ?? 0) + match[0].length,
@@ -191,6 +215,7 @@ function extractMetrics(text: string): Metric[] {
       lo: comparator === "le" ? -Infinity : value,
       hi: comparator === "ge" ? Infinity : value,
       snippet: text.slice(clauseStart, hit.end).trim(),
+      scoped: SCOPE_PATTERN.test(sentenceAround(text, hit.index, hit.end)),
     });
   }
   return metrics;
@@ -203,6 +228,9 @@ interface Polarity {
   action: string;
   objects: string[];
   snippet: string;
+  scoped: boolean;
+  /** True when the sentence has object words at all, generic or not. */
+  hasObjects: boolean;
 }
 
 const MODAL_PATTERN = /\b(MUST NOT|SHALL NOT|MUST NEVER|SHALL NEVER|NEVER|PROHIBITED|MUST|SHALL|REQUIRED)\b/;
@@ -227,12 +255,15 @@ function extractPolarity(sentence: string): Polarity | null {
   const action = predicate[0];
   if (action === undefined) return null;
 
+  const rawObjects = predicate.slice(1);
   return {
     positive,
     head: subject[subject.length - 1] ?? "",
     quals: subject.slice(0, -1),
     action,
-    objects: predicate.slice(1),
+    objects: rawObjects.filter((word) => !GENERIC_OBJECTS.has(word)),
+    hasObjects: rawObjects.length > 0,
+    scoped: SCOPE_PATTERN.test(sentence),
     snippet: sentence.trim().slice(0, 100),
   };
 }
@@ -248,6 +279,8 @@ type Entry =
 
 /** Messages for one conflicting pair, from each side's point of view. Null when the pair does not conflict. */
 function pairMessages(a: Entry, b: Entry): { forA: string; forB: string } | null {
+  // A scoped clause (if, when, unless, except) states a condition, so it is not a conflict with another clause.
+  if (isScoped(a) || isScoped(b)) return null;
   if (a.kind === "metric" && b.kind === "metric") {
     const x = a.metric;
     const y = b.metric;
@@ -263,7 +296,7 @@ function pairMessages(a: Entry, b: Entry): { forA: string; forB: string } | null
     const y = b.polarity;
     if (x.positive === y.positive) return null;
     if (!sameSubject(x.head, x.quals, y.head, y.quals)) return null;
-    if (!sameObject(x.objects, y.objects)) return null;
+    if (!sameObject(x, y)) return null;
     return {
       forA: `"${x.snippet}" contradicts "${y.snippet}" in ${b.node.coordinate}.`,
       forB: `"${y.snippet}" contradicts "${x.snippet}" in ${a.node.coordinate}.`,
