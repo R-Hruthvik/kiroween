@@ -6,21 +6,15 @@
     <title>Augeron</title>
     <script>
       // Apply the saved theme before first paint so a reload never flashes the other theme.
-      // Mirrors src/theme.ts (key "augeron.theme", default "exhumed").
+      // Mirrors src/theme.ts (key "augeron.theme", default "light", names light, dark, halloween).
       try {
         var t = localStorage.getItem("augeron.theme");
-        document.documentElement.dataset.theme = t === "paper" || t === "exhumed" ? t : "exhumed";
+        document.documentElement.dataset.theme = t === "dark" || t === "halloween" ? t : "light";
       } catch (e) {
-        document.documentElement.dataset.theme = "exhumed";
+        document.documentElement.dataset.theme = "light";
       }
     </script>
     <link rel="icon" href="data:," />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,600;1,6..72,400&display=swap"
-      rel="stylesheet"
-    />
   </head>
   <body>
     <div id="root"></div>

@@ -1,15 +1,20 @@
 /**
- * Visual themes. The theme is a `data-theme` attribute on <html>; index.css defines the tokens for
- * each value. Switched only by the View.Theme(name) text command, never by a toggle or menu.
+ * Visual themes. The theme is a `data-theme` attribute on <html>; styles/tokens.css defines the colours for
+ * each value. Light is the default. Switched only by the View.Theme(name) text command, never by a toggle or menu.
  */
-export const THEMES = ["exhumed", "paper"] as const;
+export const THEMES = ["light", "dark", "halloween"] as const;
 export type ThemeName = (typeof THEMES)[number];
 
 const THEME_KEY = "augeron.theme";
-const DEFAULT_THEME: ThemeName = "exhumed";
+const DEFAULT_THEME: ThemeName = "light";
 
 export function isThemeName(value: string): value is ThemeName {
   return (THEMES as readonly string[]).includes(value);
+}
+
+/** The saved theme, or the default when nothing valid is saved. */
+export function savedTheme(): ThemeName {
+  return readSavedTheme();
 }
 
 function readSavedTheme(): ThemeName {

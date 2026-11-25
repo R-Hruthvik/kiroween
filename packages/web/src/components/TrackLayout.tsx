@@ -1,79 +1,33 @@
-import { useEffect, useRef, useState, type JSX, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import type { JSX, ReactNode } from "react";
 
 interface Props {
+  /** The Document Track, 5/8 of the width. */
   left: ReactNode;
-  rightTop: ReactNode;
-  rightBottom: ReactNode;
-}
-
-const LEFT_MIN = 30;
-const LEFT_MAX = 80;
-const TOP_MIN = 20;
-const TOP_MAX = 80;
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, value));
+  /** The command line. Pinned to the bottom of the screen below 1024px. */
+  command: ReactNode;
+  /** System.Tool. */
+  tool: ReactNode;
+  /** System.Log. */
+  log: ReactNode;
 }
 
 /**
- * Full-viewport two-track layout. Left is the Document Track. Right is System.Tool over System.Log.
- * The 1px hairline splitters drag with the pointer. There are no toolbars, menus, or modals.
+ * The two-track shell. The Document Track takes 5/8 of the width and the system track takes 3/8, on an
+ * 8-unit grid. Inside the document, the sheet is a 12-column grid. The system track stacks the command line,
+ * System.Tool and System.Log. Below 1024px the tracks stack, and the command line stays pinned at the bottom.
+ * The proportions are fixed, so there is no drag splitter.
  */
-export function TrackLayout({ left, rightTop, rightBottom }: Props): JSX.Element {
-  const [leftPct, setLeftPct] = useState(58);
-  const [topPct, setTopPct] = useState(52);
-  const rootRef = useRef<HTMLDivElement | null>(null);
-  const rightRef = useRef<HTMLDivElement | null>(null);
-  const dragging = useRef<"x" | "y" | null>(null);
-
-  useEffect(() => {
-    const onMove = (event: PointerEvent): void => {
-      if (dragging.current === "x" && rootRef.current) {
-        const rect = rootRef.current.getBoundingClientRect();
-        setLeftPct(clamp(((event.clientX - rect.left) / rect.width) * 100, LEFT_MIN, LEFT_MAX));
-      }
-      if (dragging.current === "y" && rightRef.current) {
-        const rect = rightRef.current.getBoundingClientRect();
-        setTopPct(clamp(((event.clientY - rect.top) / rect.height) * 100, TOP_MIN, TOP_MAX));
-      }
-    };
-    const onUp = (): void => {
-      dragging.current = null;
-    };
-    window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerup", onUp);
-    return () => {
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp);
-    };
-  }, []);
-
-  const startDrag = (axis: "x" | "y") => (event: ReactPointerEvent<HTMLDivElement>): void => {
-    event.preventDefault();
-    dragging.current = axis;
-  };
-
+export function TrackLayout({ left, command, tool, log }: Props): JSX.Element {
   return (
-    <div ref={rootRef} className="track-layout" style={{ gridTemplateColumns: `${leftPct}% 1px 1fr` }}>
-      <section className="track track--left" aria-label="Document Track">
+    <div className="tracks">
+      <section className="track track--doc" aria-label="Document Track">
         {left}
       </section>
-      <div
-        className="splitter splitter--x"
-        role="separator"
-        aria-orientation="vertical"
-        onPointerDown={startDrag("x")}
-      />
-      <div ref={rightRef} className="track track--right" style={{ gridTemplateRows: `${topPct}% 1px 1fr` }}>
-        <section className="track track--tool">{rightTop}</section>
-        <div
-          className="splitter splitter--y"
-          role="separator"
-          aria-orientation="horizontal"
-          onPointerDown={startDrag("y")}
-        />
-        <section className="track track--log">{rightBottom}</section>
-      </div>
+      <section className="track track--system" aria-label="System Track">
+        {command}
+        <div className="track__tool">{tool}</div>
+        <div className="track__log">{log}</div>
+      </section>
     </div>
   );
 }

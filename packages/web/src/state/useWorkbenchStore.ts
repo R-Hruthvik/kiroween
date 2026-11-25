@@ -16,17 +16,30 @@ import {
   splitPipeline,
   type DocumentTree,
   type LogEntry,
+  type ReviewMarks,
   type WorkbenchState,
 } from "@augeron/core";
 import { FIXTURES, isFixtureName } from "../fixtures";
 import { isLlmConfigured, llmEndpoint, reviewAudit, setLlmKey } from "../adapters/optionalLlmAdapter";
-import { THEMES, applyTheme, isThemeName } from "../theme";
+import { THEMES, applyTheme, isThemeName, savedTheme, type ThemeName } from "../theme";
+import { playCue, setAudioEnabled, type Cue } from "../audio/soundscape";
 
 const STORAGE_KEY = "augeron.workbench.v1";
 const HIGHLIGHT_MS = 1200;
 const UI_ONLY_ACTIONS = new Set(["Edit.Source", "Edit.Done"]);
 /** Commands the web layer handles itself, outside the core registry. */
-const WEB_ONLY_TOKENS = ["Doc.Load", "AI.Config", "Edit.Source", "Edit.Done", "View.Theme"] as const;
+const WEB_ONLY_TOKENS = [
+  "Doc.Load",
+  "AI.Config",
+  "Edit.Source",
+  "Edit.Done",
+  "View.Theme",
+  "Exhume.Workbench",
+  "System.Veil",
+  "Audio.On",
+  "Audio.Off",
+] as const;
+const VEIL_KEY = "augeron.veil.seen";
 const RUNNABLE_TOKENS: ReadonlySet<string> = new Set([...BUILTIN_REGISTRY.keys(), ...WEB_ONLY_TOKENS]);
 
 /** True when `Module.Action` names a command that can actually run, so other text never renders as a button. */
@@ -50,6 +63,8 @@ export interface Pulse {
   /** Coordinates that the command output mentions. */
   affected: string[];
   tone: PulseTone;
+  /** Pipeline stages of the command that produced this pulse, e.g. ["Spec.Audit"]. */
+  stages: string[];
   nonce: number;
 }
 
@@ -71,6 +86,14 @@ export interface UiState {
   auditActive: boolean;
   /** Coordinates highlighted after a command. Cleared after HIGHLIGHT_MS. */
   highlight: ReadonlySet<string>;
+  /** Pulse nonce of the last successful Spec.Audit run. Each run replays the flag drop-in. */
+  auditNonce: number;
+  /** True while the Threshold Veil entry chamber covers the workbench. */
+  veilOpen: boolean;
+  /** True when procedural WebAudio cues are on. Off by default and never persisted. */
+  audioOn: boolean;
+  /** The active theme. Set by View.Theme(name), and by the saved choice on load. */
+  theme: ThemeName;
 }
 
 const EMPTY_HIGHLIGHT: ReadonlySet<string> = new Set<string>();
@@ -78,9 +101,11 @@ const EMPTY_HIGHLIGHT: ReadonlySet<string> = new Set<string>();
 /** Time each log entry was added, keyed by the entry object. Not persisted. */
 export const loggedAt = new WeakMap<LogEntry, number>();
 
-export const DEFAULT_TOOL_TEXT = [
-  "View.Spec(a)  View.Spec(h)  View.Spec(f)  View.Spec(u)  View.Spec(r)",
-  "View.Level(1)  View.Level(2)",
+/**
+ * Every pad text shipped before the grouped layout. A saved pad equal to one of them was never
+ * edited, so it is upgraded to the new default. An edited pad is kept as is.
+ */
+const CORE_PAD = [
   "Spec.Audit",
   "Spec.Tighten",
   "Cite.Verify",
@@ -88,14 +113,132 @@ export const DEFAULT_TOOL_TEXT = [
   "Spec.Audit -> Outline.ExtractTasks",
   "Cite.Verify -> View.Spec(u)",
   "Doc.InjectFlaw -> Spec.Audit -> Outline.ExtractTasks",
+];
+const VIEWS = "View.Spec(a)  View.Spec(h)  View.Spec(f)  View.Spec(u)  View.Spec(r)";
+const LOADS = "Doc.Load(rfc)  Doc.Load(brief)  Doc.Load(prd)";
+const THEMES_LINE = "View.Theme(light)  View.Theme(dark)";
+const SYSTEM = "System.Undo  System.Redo  System.Export  System.ClearLog";
+/** The default pad before Find.Look, Link.Back, Help.Show, Tool.Check, and System.History were added. */
+const PREVIOUS_DEFAULT_TOOL_TEXT = [
+  "# X-RAY VIEWS",
+  "View.Spec(a)  View.Spec(h)  View.Spec(f)  View.Spec(u)  View.Spec(r)",
+  "View.Level(1)  View.Level(2)",
+  "View.Brief(2)",
+  "Cite.Verify -> View.Spec(u)",
+  "",
+  "# DISSECT & REFINE",
+  "Spec.Audit  Spec.Tighten  Cite.Verify  Outline.ExtractTasks  Spec.Ledger",
+  "Spec.Audit -> Outline.ExtractTasks",
+  "Doc.InjectFlaw -> Spec.Audit -> Outline.ExtractTasks",
+  "",
+  "# ARCHIVE & REALM",
   "Doc.Load(rfc)  Doc.Load(brief)  Doc.Load(prd)",
-  "View.Theme(exhumed)  View.Theme(paper)",
   "System.Undo  System.Redo  System.Export  System.ClearLog",
+  "View.Theme(exhumed)  View.Theme(paper)",
+  "Audio.On  Audio.Off  System.Veil",
 ].join("\n");
+/** The default pad before the grouped, annotated layout. A saved pad equal to it is upgraded. */
+const PRE_REDESIGN_TOOL_TEXT = [
+  "# X-RAY VIEWS",
+  "View.Spec(a)  View.Spec(h)  View.Spec(f)  View.Spec(u)  View.Spec(r)",
+  "View.Level(1)  View.Level(2)",
+  "View.Brief(2)",
+  "Cite.Verify -> View.Spec(u)",
+  "",
+  "# DISSECT & REFINE",
+  "Spec.Audit  Spec.Tighten  Cite.Verify  Outline.ExtractTasks  Spec.Ledger",
+  "Spec.Audit -> Outline.ExtractTasks",
+  "Doc.InjectFlaw -> Spec.Audit -> Outline.ExtractTasks",
+  "",
+  "# FIND & TRACE",
+  "Find.Look(retention)  Link.Back(§4.3a)  Help.Show(Find.Look)",
+  "",
+  "# CHECK & HISTORY",
+  "Tool.Check  System.History",
+  "",
+  "# ARCHIVE & REALM",
+  "Doc.Load(rfc)  Doc.Load(brief)  Doc.Load(prd)",
+  "System.Undo  System.Redo  System.Export  System.ClearLog",
+  "View.Theme(exhumed)  View.Theme(paper)",
+  "Audio.On  Audio.Off  System.Veil",
+].join("\n");
+
+/**
+ * The default pad. Lines starting with "#" are group headings, named by what the command does. A line of
+ * one command followed by two spaces and a note shows the note in lead colour. Neither headings nor notes hold live tokens.
+ */
+const DEFAULT_TOOL_LINES = [
+  "# Start here",
+  "Spec.Audit  check this document for contradictions, broken references and vague terms",
+  "View.Brief(2)  the two key sentences of each section, with their addresses",
+  "Doc.Load(brief)  load a different sample. Your text stays in System.Undo.",
+  "",
+  "# Read, changes no text",
+  "View.Spec(a)  the full document",
+  "View.Spec(h)  headings only",
+  "View.Spec(f)  first sentence of each paragraph, plus flagged sentences",
+  "View.Spec(u)  claims and assumptions with no citation",
+  "View.Spec(r)  requirements and flagged paragraphs",
+  "Find.Look(retention)  paragraphs that contain a word, with their addresses",
+  "Link.Back(§4.3a)  paragraphs that refer to one address",
+  "Spec.Ledger  every sentence with a modal keyword",
+  "Help.Show  list every command",
+  "",
+  "# Check",
+  "Cite.Verify  check § references and citations",
+  "Outline.ExtractTasks  turn SHALL and MUST paragraphs into a task list",
+  "Tool.Check  check every line of this pad",
+  "",
+  "# Change text, undoable",
+  "Spec.Tighten  strip filler and rewrite passive phrasing as EARS",
+  "Doc.InjectFlaw  demo: add a conflict and a broken reference",
+  "System.Undo  restore the previous text",
+  "System.Redo  reapply the text you undid",
+  "",
+  "# History and files",
+  "System.History  list the commands run this session",
+  "System.Export  download the audited Markdown",
+  "System.ClearLog  clear System.Log",
+  "View.Theme(light)  light sheet, the default",
+  "View.Theme(dark)  night sheet",
+  "View.Theme(halloween)  night sheet with moonlit ink and pumpkin redline",
+  "Audio.On  soundscape on",
+  "Audio.Off  soundscape off",
+  "System.Veil  return to the entry page",
+];
+
+export const DEFAULT_TOOL_TEXT = DEFAULT_TOOL_LINES.join("\n");
+/** The default pad before the halloween theme. A saved pad equal to it is upgraded to the new default. */
+const BEFORE_HALLOWEEN_TOOL_TEXT = DEFAULT_TOOL_LINES.filter((line) => !line.startsWith("View.Theme(halloween)")).join("\n");
+
+const LEGACY_TOOL_TEXTS: ReadonlySet<string> = new Set([
+  ...[
+    [VIEWS, ...CORE_PAD, SYSTEM],
+    [VIEWS, ...CORE_PAD, LOADS, SYSTEM],
+    [VIEWS, ...CORE_PAD, LOADS, THEMES_LINE, SYSTEM],
+    [VIEWS, "View.Level(1)  View.Level(2)", ...CORE_PAD, LOADS, THEMES_LINE, SYSTEM],
+  ].map((lines) => lines.join("\n")),
+  PREVIOUS_DEFAULT_TOOL_TEXT,
+  PRE_REDESIGN_TOOL_TEXT,
+  BEFORE_HALLOWEEN_TOOL_TEXT,
+]);
+
 
 interface Persisted {
   markdown: string;
   toolText: string;
+  /** Review marks by § address. Missing in state saved before Review.Mark existed. */
+  reviews: ReviewMarks;
+}
+
+/** Keeps only well-formed entries: a § address mapped to a fingerprint string. Anything else is dropped. */
+function readReviews(value: unknown): ReviewMarks {
+  if (typeof value !== "object" || value === null) return {};
+  const marks: Record<string, string> = {};
+  for (const [coord, print] of Object.entries(value)) {
+    if (coord.startsWith("§") && typeof print === "string") marks[coord] = print;
+  }
+  return marks;
 }
 
 function readPersisted(): Persisted | null {
@@ -111,7 +254,8 @@ function readPersisted(): Persisted | null {
       typeof parsed.markdown === "string" &&
       typeof parsed.toolText === "string"
     ) {
-      return { markdown: parsed.markdown, toolText: parsed.toolText };
+      const reviews = "reviews" in parsed ? readReviews(parsed.reviews) : {};
+      return { markdown: parsed.markdown, toolText: parsed.toolText, reviews };
     }
     return null;
   } catch {
@@ -124,6 +268,7 @@ function persist(state: UiState): void {
     markdown: serializeTree(state.wb.history.present),
     // A key typed into AI.Config must not be written to localStorage.
     toolText: state.toolText.replace(CONFIG_ARG, "AI.Config()"),
+    reviews: state.wb.reviews,
   };
   try {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
@@ -132,19 +277,37 @@ function persist(state: UiState): void {
   }
 }
 
+function veilSeen(): boolean {
+  try {
+    return window.sessionStorage.getItem(VEIL_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
 function initialState(): UiState {
   const saved = readPersisted();
   const tree: DocumentTree = parseDocument(saved?.markdown ?? FIXTURES.rfc.markdown);
-  const wb = createWorkbenchState(tree);
+  // Review marks come from localStorage, not from the document, so they survive a reload and never touch rawText.
+  const wb: WorkbenchState = { ...createWorkbenchState(tree), reviews: saved?.reviews ?? {} };
   return {
     wb,
     splitCoord: null,
     sourceEdit: false,
     sourceDraft: "",
-    toolText: saved?.toolText ?? DEFAULT_TOOL_TEXT,
+    toolText:
+      saved === null || LEGACY_TOOL_TEXTS.has(saved.toolText)
+        ? DEFAULT_TOOL_TEXT
+        : saved.toolText
+            .replaceAll("View.Theme(exhumed)", "View.Theme(dark)")
+            .replaceAll("View.Theme(paper)", "View.Theme(light)"),
     pulse: null,
     auditActive: false,
     highlight: EMPTY_HIGHLIGHT,
+    auditNonce: 0,
+    veilOpen: !veilSeen(),
+    audioOn: false,
+    theme: savedTheme(),
   };
 }
 
@@ -296,6 +459,42 @@ export function cancelSourceEdit(): void {
   setState({ sourceEdit: false, sourceDraft: "" });
 }
 
+/** Lowers the Threshold Veil over the workbench. */
+export function openVeil(): void {
+  setState({ veilOpen: true });
+}
+
+/** Lifts the veil and remembers it for this browser session. */
+export function closeVeil(): void {
+  try {
+    window.sessionStorage.setItem(VEIL_KEY, "1");
+  } catch {
+    // Blocked storage only means the veil shows again on the next load.
+  }
+  if (state.veilOpen) setState({ veilOpen: false });
+}
+
+function setAudioCommand(on: boolean): void {
+  setAudioEnabled(on);
+  setState({ audioOn: on });
+  appendLog(
+    stamp({
+      title: on ? "Audio.On" : "Audio.Off",
+      body: on
+        ? "Soundscape on. Procedural WebAudio cues for View-Spec switches, contradictions, and Spec.Tighten."
+        : "Soundscape off.",
+    }),
+  );
+}
+
+/** One sound per run, strongest first: a contradiction bell, a tighten chime, then a View-Spec whoosh. */
+function cueFor(stages: readonly string[], body: string): Cue | null {
+  if (body.includes("[CONTRADICTION]") && (stages.includes("Spec.Audit") || stages.includes("Doc.InjectFlaw"))) return "bell";
+  if (stages.includes("Spec.Tighten")) return "chime";
+  if (stages.some((stage) => stage.startsWith("View.Spec") || stage.startsWith("View.Level"))) return "whoosh";
+  return null;
+}
+
 function pulseTone(line: string, body: string): PulseTone {
   const stages = splitPipeline(line);
   if (stages.includes("Doc.InjectFlaw") || body.includes("[CONTRADICTION]")) return "danger";
@@ -396,6 +595,7 @@ function setThemeCommand(arg: string): void {
     return;
   }
   applyTheme(arg);
+  setState({ theme: arg });
   appendLog(stamp({ title, body: `Theme: ${arg}. Saved for your next visit.` }));
 }
 
@@ -409,6 +609,14 @@ async function appendAiReview(markdown: string, report: string): Promise<void> {
 }
 
 /**
+ * The pad after System.History: the current pad, then a "# HISTORY" heading and one command per line.
+ * Each line is a token, so it runs again on a click. The document is not touched.
+ */
+function appendHistoryBlock(pad: string, commands: readonly string[]): string {
+  return [pad.replace(/\s+$/, ""), "", "# HISTORY", ...commands].join("\n");
+}
+
+/**
  * Runs one Oberon line through core. Runs are queued, so overlapping clicks execute in order.
  * sourceCoord is the coordinate that was clicked, and commandId is the DOM id of the token.
  */
@@ -418,6 +626,19 @@ export function dispatchLine(line: string, options: { commandId?: string; source
     if (trimmed === "Edit.Source") startSourceEdit();
     if (trimmed === "Edit.Done") finishSourceEdit();
     return Promise.resolve();
+  }
+  if (trimmed === "Exhume.Workbench") {
+    closeVeil();
+    return Promise.resolve();
+  }
+  if (trimmed === "System.Veil") {
+    openVeil();
+    return Promise.resolve();
+  }
+  if (trimmed === "Audio.On" || trimmed === "Audio.Off") {
+    const on = trimmed === "Audio.On";
+    queue = queue.then(() => setAudioCommand(on));
+    return queue;
   }
   const load = LOAD_TOKEN.exec(trimmed);
   if (load) {
@@ -439,7 +660,7 @@ export function dispatchLine(line: string, options: { commandId?: string; source
   }
   queue = queue.then(async () => {
     const before = state.wb;
-    let next = await runLine(before, trimmed, BUILTIN_REGISTRY);
+    let next = await runLine(before, trimmed, BUILTIN_REGISTRY, { padText: state.toolText });
     const entry = next.log.at(-1);
     if (entry) loggedAt.set(entry, Date.now());
     const auditRan = splitPipeline(trimmed).includes("Spec.Audit");
@@ -461,7 +682,10 @@ export function dispatchLine(line: string, options: { commandId?: string; source
     if (exportAt >= 0 && entry) {
       // Export the tree as it was at the System.Export stage, not after later stages. Core is pure
       // and deterministic, so re-running the stages up to the export reproduces that tree exactly.
-      const upTo = exportAt === stages.length - 1 ? next : await runLine(before, stages.slice(0, exportAt + 1).join(" -> "), BUILTIN_REGISTRY);
+      const upTo =
+        exportAt === stages.length - 1
+          ? next
+          : await runLine(before, stages.slice(0, exportAt + 1).join(" -> "), BUILTIN_REGISTRY, { padText: state.toolText });
       const exportEntry = upTo.log.at(-1);
       if (exportEntry && !exportEntry.error) {
         const { markdown, receipt } = downloadAuditedSpec(upTo.history.present);
@@ -475,17 +699,25 @@ export function dispatchLine(line: string, options: { commandId?: string; source
     const affected = entry ? coordsIn(entry.body, next.history.present) : [];
     nonce += 1;
     const source = options.sourceCoord ?? primaryTargetCoord(next);
+    const finalBody = next.log.at(-1)?.body ?? "";
+    const cue = entry && !entry.error ? cueFor(stages, finalBody) : null;
+    if (cue) playCue(cue);
+    // System.History lists the commands in the log, and this copies them into the pad as clickable lines.
+    const appendHistory = stages.includes("System.History") && !entry?.error && before.commandHistory.length > 0;
     setState({
       wb: next,
       auditActive,
+      ...(appendHistory ? { toolText: appendHistoryBlock(state.toolText, before.commandHistory) } : {}),
       pulse: {
         source,
         commandId: options.commandId ?? null,
         affected,
-        tone: pulseTone(trimmed, next.log.at(-1)?.body ?? ""),
+        tone: pulseTone(trimmed, finalBody),
+        stages,
         nonce,
       },
       highlight: affected.length > 0 ? new Set(affected) : state.highlight,
+      auditNonce: auditRan && entry && !entry.error ? nonce : state.auditNonce,
     });
     if (affected.length > 0) {
       clearTimeout(highlightTimer);
@@ -495,9 +727,3 @@ export function dispatchLine(line: string, options: { commandId?: string; source
   return queue;
 }
 
-/** Returns the full text line that contains position `index` in `text`. */
-export function lineAt(text: string, index: number): string {
-  const start = text.lastIndexOf("\n", index - 1) + 1;
-  const end = text.indexOf("\n", index);
-  return text.slice(start, end === -1 ? text.length : end);
-}

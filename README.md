@@ -30,7 +30,7 @@ Press a key with the Document Track focused. The keys are off while you type in 
 | --- | --- | --- |
 | `a` | All | Every node, with its text unchanged. Also clears any `View.Level` clip. |
 | `h` | Headings | Headings only. |
-| `f` | First sentence | Each paragraph's opening sentence, with `[+Nw]` for hidden words. |
+| `f` | First sentence | Each paragraph's opening sentence and every sentence with an RFC 2119 keyword (SHALL, MUST, SHOULD, MAY, OPTIONAL, RECOMMENDED, and the rest), with `[+Nw]` for hidden words. Node roles and audit flags do not depend on this list. |
 | `u` | Unverified | Claims and assumptions with no citation or `§` reference. |
 | `r` | Requirements | SHALL and MUST requirements, plus nodes with CONTRADICTION or BROKEN_REF. |
 
@@ -52,8 +52,12 @@ Tokens take the form `Module.Action` or `Module.Action(arg)`. Pipelines look lik
 | --- | --- | --- |
 | `View.Spec(a\|h\|f\|u\|r)` | No | Switches the view code. Same as the keys. `View.Spec(a)` also clears the level clip. |
 | `View.Level(n)` | No | Clips the view to heading depth `n`. See [Level clipping](#level-clipping-viewleveln). |
+| `View.Brief(n)` | No | Excerpt view. Keeps up to `n` whole sentences per section (default 2), picked by RFC 2119 keyword, then numbers and definitions, then words shared with the heading. Each sentence shows its `§` address. A footer gives the word counts. Any View-Spec or `View.Level` turns it off. |
 | `View.Theme(exhumed\|paper)` | No | Web only. Switches the theme. `exhumed` is the default, "Nocturnal Archival Exhumation", a dark archive. `paper` is the warm ivory theme. The choice is saved in the browser. |
 | `Spec.Audit` | No | Flags contradictions, broken `§` references, unverified claims, and vague terms. The checks are deterministic text rules, so on real specs they can produce false positives. Treat each flag as a prompt to look. |
+| `Spec.Ledger(n)` | No | Lists every sentence with an RFC 2119 keyword: address, modal, condition or exception clause, and whether `View.Brief(n)` keeps it (default `n` is 2). Also checks that every row is in the brief or marked omitted. |
+| `Review.Mark(§x)` | No | Web only. Marks one `§` paragraph reviewed. The mark is kept in the browser, outside the text, and stops counting when that paragraph changes. |
+| `Review.Clear(§x)` | No | Web only. Removes the review mark from one `§` paragraph. The text is unchanged. |
 | `Spec.Tighten` | Yes | Removes filler phrases such as "basically", "very", and "it is important to note that". Turns "in order to" into "to". Turns "The system should", "will", or "should try to" into "The system SHALL", and "X is required to" into "X SHALL". It does not rewrite passive voice into EARS form. It skips headings and code fences, and it acts on the selection when one exists. |
 | `Cite.Verify` | No | Checks `§` references and citations. |
 | `Outline.ExtractTasks` | No | Builds a prioritized checklist. P0 is CONTRADICTION or BROKEN_REF, P1 is other requirements, and P2 is other flagged nodes. |
@@ -62,12 +66,18 @@ Tokens take the form `Module.Action` or `Module.Action(arg)`. Pipelines look lik
 | `System.Undo` / `System.Redo` | Yes | Steps through the history stack. |
 | `System.ClearLog` | No | Clears the log and keeps the welcome block. |
 | `System.Export` | No | Logs the audited Markdown. The web app downloads `augeron-audited-spec.md` and logs a receipt. |
+| `Find.Look(text)` | No | Acme-style Look. Lists every paragraph and heading that contains `text`, ignoring case, with its `§` address and an excerpt. Empty text is an error. |
+| `Link.Back(§x)` | No | Lists every paragraph and heading whose text refers to `§x`, with an excerpt. An address that does not exist is an error. |
+| `Help.Show(Module.Action)` | No | Describes one command: what it does, its argument, whether it changes the tree, and an example. With no argument, lists every command by module. |
+| `Tool.Check` | No | Web only. Checks every line of System.Tool. Each token and `->` pipeline must parse and name a known command. Gives the line number of each problem, and for each line what it reads and whether it changes the tree. |
+| `System.History` | No | Web only. Lists the core commands that ran this session. The browser also appends them to System.Tool under `# HISTORY`, where each line runs again on a click. Only the pad changes. |
 | `AI.Config(key)` | No | Web only. Turns on the advisory AI review for this session. `AI.Config()` turns it off. |
 | `Edit.Source` / `Edit.Done` | Yes | Web only. Opens the Markdown source for editing, and re-parses it on Done. |
 
 ## Using commands
 
 - **Middle-click** or **Ctrl/Cmd-click** a token to run it. The target is the current selection. With no selection, `Spec.Tighten` and `Outline.ExtractTasks` act on the full document. `Spec.Audit` and `Cite.Verify` always check the full document.
+- **Ctrl/Cmd+Enter** in System.Tool runs the command line at the cursor. A line with `->` runs as one pipeline, and a bad stage stops the whole line before anything runs. A line with several tokens runs the token under the cursor, or the nearest token before it.
 - A plain click on a token in System.Tool or System.Log shows a hint. It does not run the command. The exception is `Edit.Source` and `Edit.Done`, which run on a plain click.
 - Click a `§` coordinate to open that node in the split pane.
 
@@ -83,7 +93,7 @@ Tokens take the form `Module.Action` or `Module.Action(arg)`. Pipelines look lik
 
 - `augeron_run_pipeline` returns the log, `affectedCoordinates`, `mutated`, and `nextViewSpec`. It leaves out the full `updatedTree` unless the caller passes `includeTree: true`, which defaults to `false`.
 - `targetCoord` selects a `§` coordinate before the pipeline runs. Only commands whose catalog scope includes the selection honor it.
-- `System.Undo`, `System.Redo`, and `System.ClearLog` are rejected, because they need browser state. The browser-only tokens are rejected too.
+- `System.Undo`, `System.Redo`, `System.ClearLog`, `System.History`, `Tool.Check`, `Review.Mark`, and `Review.Clear` are rejected, because they need browser state. The browser-only tokens are rejected too. `Find.Look`, `Link.Back`, and `Help.Show` run here.
 - `View.Level` is accepted and logs the clip. The MCP runner carries only the view code between stages, so the clip does not carry into later tool calls or into the returned payload.
 
 ## Invariants
