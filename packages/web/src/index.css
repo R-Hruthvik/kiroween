@@ -324,6 +324,12 @@ kbd {
   text-align: right;
 }
 
+.pane-header__actions {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+}
+
 .pane-hint--nudge {
   color: var(--redline);
 }
@@ -1601,10 +1607,6 @@ strong {
     border-top: var(--hairline) solid var(--grid);
     border-bottom: 0;
     box-shadow: var(--shadow-float);
-  }
-
-  .command-line__hint {
-    display: none;
   }
 }
 

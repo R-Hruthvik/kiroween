@@ -511,6 +511,21 @@ let queue: Promise<void> = Promise.resolve();
 let highlightTimer: ReturnType<typeof setTimeout> | undefined;
 let nonce = 0;
 
+/**
+ * Runs one queued step. A throw is logged to System.Log as an error entry, and the queue keeps going.
+ * The title is supplied by the caller and must never contain a key.
+ */
+function enqueue(title: string, task: () => void | Promise<void>): Promise<void> {
+  queue = queue.catch(() => undefined).then(async () => {
+    try {
+      await task();
+    } catch (error: unknown) {
+      appendLog({ title, body: "", error: error instanceof Error ? error.message : "Command failed." });
+    }
+  });
+  return queue;
+}
+
 function stamp(entry: LogEntry): LogEntry {
   loggedAt.set(entry, Date.now());
   return entry;
@@ -635,30 +650,39 @@ export function dispatchLine(line: string, options: { commandId?: string; source
     openVeil();
     return Promise.resolve();
   }
+  if (trimmed.includes("AI.Config") && trimmed.includes("->")) {
+    // The key sits in the argument, so the line is refused without echoing it. The regex redaction only matches the
+    // parenthesised form, so it cannot be the guard here.
+    appendLog({ title: "AI.Config", body: "", error: "AI.Config cannot run in a pipeline. Put it on its own line." });
+    return Promise.resolve();
+  }
   if (trimmed === "Audio.On" || trimmed === "Audio.Off") {
     const on = trimmed === "Audio.On";
-    queue = queue.then(() => setAudioCommand(on));
-    return queue;
+    return enqueue(trimmed, () => setAudioCommand(on));
   }
   const load = LOAD_TOKEN.exec(trimmed);
   if (load) {
     const arg = (load[1] ?? "").trim();
-    queue = queue.then(() => loadFixture(arg));
-    return queue;
+    return enqueue(trimmed, () => loadFixture(arg));
   }
   const theme = THEME_TOKEN.exec(trimmed);
   if (theme) {
     const arg = (theme[1] ?? "").trim();
-    queue = queue.then(() => setThemeCommand(arg));
-    return queue;
+    return enqueue(trimmed, () => setThemeCommand(arg));
   }
   const config = CONFIG_TOKEN.exec(trimmed);
   if (config) {
     const arg = (config[1] ?? "").trim();
-    queue = queue.then(() => configureAi(arg));
-    return queue;
+    // The title is fixed and the error is fixed, so neither can carry the key.
+    return enqueue("AI.Config", () => {
+      try {
+        configureAi(arg);
+      } catch {
+        appendLog({ title: "AI.Config", body: "", error: "AI.Config could not save the key for this session." });
+      }
+    });
   }
-  queue = queue.then(async () => {
+  return enqueue(trimmed, async () => {
     const before = state.wb;
     let next = await runLine(before, trimmed, BUILTIN_REGISTRY, { padText: state.toolText });
     const entry = next.log.at(-1);
@@ -724,6 +748,5 @@ export function dispatchLine(line: string, options: { commandId?: string; source
       highlightTimer = setTimeout(() => setState({ highlight: EMPTY_HIGHLIGHT }), HIGHLIGHT_MS);
     }
   });
-  return queue;
 }
 

@@ -138,8 +138,9 @@ function NodeTree({
     .filter((part) => part.length > 0)
     .join(" ");
   const tag = ROLE_TAGS[node.role] ?? "";
-  // Headings render as real h1..h6 so assistive tech gets the outline. Body paragraphs are block Markdown.
-  const headingTag: HeadingTag = `h${Math.min(Math.max(node.depth, 1), 6)}` as HeadingTag;
+  // Headings render as real h2..h6 so assistive tech gets the outline. h1 is reserved for the workbench title,
+  // so depth 1 maps to h2. Body paragraphs are block Markdown.
+  const headingTag: HeadingTag = `h${Math.min(Math.max(node.depth, 1) + 1, 6)}` as HeadingTag;
   const onRowKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
     // Only the row itself: Enter on a command token or § link inside it keeps its own meaning.
     if (event.target !== event.currentTarget) return;
@@ -208,7 +209,7 @@ function NodeTree({
   );
 }
 
-/** A heading node. Its tag is h1 to h6, and its inline text keeps commands and § addresses live. */
+/** A heading node. Its tag is h2 to h6 (h1 is the workbench title), and its inline text keeps commands and § addresses live. */
 function HeadingText({ tag: Tag, text, idPrefix, coord }: { tag: HeadingTag; text: string; idPrefix: string; coord: string }): JSX.Element {
   return (
     <Tag className="node__text node__text--heading">

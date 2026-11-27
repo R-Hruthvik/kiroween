@@ -81,8 +81,15 @@ export function SystemToolPane(): JSX.Element {
     <div className="tool-pane">
       <header className="pane-header">
         <span className="pane-title">System.Tool</span>
-        <span className={nudge ? "pane-hint pane-hint--nudge" : "pane-hint"} role="status" aria-live="polite">
-          {nudge ?? "Middle-click or Ctrl/Cmd-click a command. Ctrl/Cmd+Enter runs the line at the cursor."}
+        <span className="pane-header__actions">
+          <span className={nudge ? "pane-hint pane-hint--nudge" : "pane-hint"} role="status" aria-live="polite">
+            {nudge ?? "Middle-click or Ctrl/Cmd-click a command. Ctrl/Cmd+Enter runs the line at the cursor."}
+          </span>
+          {editing ? null : (
+            <button type="button" className="plain-button" onClick={() => setEditing(true)}>
+              Edit pad
+            </button>
+          )}
         </span>
       </header>
       {editing ? (
