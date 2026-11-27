@@ -1,12 +1,12 @@
 # Tasks: Augeron Workbench
 
-Source: BUILD_PLAN.md Section 4. The plan's timeline ran November 18 to December 4, 2026, with code freeze and video upload on December 3. The work itself ran from November 18 to 21, 2026, by git commit date (`git log --format='%h %ad %s' --date=short`).
+Source: the phase plan below. The original BUILD_PLAN.md is not in the repository or its history. The plan's timeline ran November 18 to December 4, 2026, with code freeze and video upload on December 3. The commits ran from November 18 to 27, 2026, by git commit date (`git log --format='%h %ad %s' --date=short`).
 
 ## Status at a glance
 
 | Item | State | Evidence |
 | --- | --- | --- |
-| Working kiro-cli MCP server | Done | `.kiro/settings/mcp.json` committed in `9f31da0` (2026-11-19). kiro-cli 3.5.0 lists the server, and a live `augeron_verify_audit` call returned correct JSON (`docs/audit/02-skeptic.md`, row 11). The Kiro IDE is not verified. |
+| Working kiro-cli MCP server | Done | `.kiro/settings/mcp.json` committed in `a3d96cd` (2026-11-19). kiro-cli 3.5.0 lists the server, and a live `augeron_verify_audit` call returned correct JSON (`docs/audit/02-skeptic.md`, row 11). The Kiro IDE is not verified. |
 | `verify-invariants` hook | Fired | 21 completed `verify-core-invariants` runs in the main Kiro session transcript, from 2026-11-18T17:40Z to 2026-11-19T08:22Z. The transcript is in `~/.kiro/sessions/`, outside the repo. Other local sessions have more runs, and they are not deduplicated. The runs came from agent edits. Manual saves in the IDE are not recorded. |
 | Deployed URL | Not done | No deployment exists yet. |
 | Demo video | Not done | Not recorded. |
@@ -43,8 +43,8 @@ Source: BUILD_PLAN.md Section 4. The plan's timeline ran November 18 to December
 - [x] Build `NlsDocumentPane.tsx`: `§` gutter badges, role indicators, inline flag highlights, and `a`/`h`/`f`/`u`/`r` keys. The pane shows the `View.Level` clip as a status note.
 - [x] Build `CoordinateSplitPane.tsx`: clicking a `§` reference opens the target node side by side.
 - [x] Build `SystemToolPane.tsx` (editable command pad with default recipes, including `View.Level(1)` and `View.Level(2)`) and `SystemLogPane.tsx` (clickable log output).
-- [x] Build `PulseOverlay.tsx`: directional pulse from selection to command.
-- [x] **Gate:** the full user flow works offline in the browser with no menus or modals. This was checked with 17 headless-Chrome interaction checks against the production build. That script is not in the repo. Fonts load from Google, so they fall back offline.
+- [x] Build `PulseOverlay.tsx`: directional pulse from selection to command (`4ed7c9f`). Removed in `f4d5428`; no pulse styling remains.
+- [x] **Gate:** the full user flow works offline in the browser with no menus or modals. This was checked with 17 headless-Chrome interaction checks against the production build. That script is not in the repo. Fonts were loaded from Google Fonts at that point, so they fell back offline. Since `f4d5428`, IBM Plex Mono and IBM Plex Serif are bundled from `@fontsource` packages and load offline.
 
 ## Phase 5: MCP Server, Showcase Fixtures, and Optional AI Adapter (Nov 19)
 
@@ -57,12 +57,13 @@ Source: BUILD_PLAN.md Section 4. The plan's timeline ran November 18 to December
 
 ## Sprint history after the first build (git history)
 
-- [x] **Sprint 1 and 1.5** (`bb7f807`, 2026-11-20): usability fixes in the web workbench, including Escape to clear the selection and the Nocturnal Archival Exhumation theme (`View.Theme(exhumed|paper)`).
+- [x] **Sprint 1 and 1.5** (`bb7f807`, 2026-11-20): usability fixes in the web workbench, including Escape to clear the selection and the Nocturnal Archival Exhumation theme (`View.Theme(exhumed|paper)`). Replaced in `f4d5428` by `View.Theme(light|dark|halloween)`.
 - [x] **Sprint 2** (`32ee626`, 2026-11-21): parser and analyzer hardening for real-world specs.
 - [x] **Sprint 2.5** (`1b0da7f`, 2026-11-21): tests that kill the mutation gaps M1, M2, and M13.
 - [x] **Sprint 2.6** (`d945c85`, 2026-11-21): recognize numbered reference headings and wrapped reference keys.
-- [ ] **Sprint 3, 3A** (MCP tool logic moved to `packages/mcp-server/src/tools.ts`, `includeTree`, tool tests, and the CI workflow `.github/workflows/ci.yml`): present in the working tree, not committed at the time of writing.
-- [ ] **Sprint 3B** (`View.Level(n)` in core with unit tests, the web pad and pane, and the honest docs pass): done in the working tree, not committed.
+- [x] **Sprint 3, 3A** (`56c2e0e`, 2026-11-22): MCP tool logic moved to `packages/mcp-server/src/tools.ts`, `includeTree`, tool tests, and the CI workflow `.github/workflows/ci.yml`.
+- [x] **Sprint 3B** (`cb66c46`, 2026-11-22): `View.Level(n)` in core with unit tests in `packages/core/tests/view-level.test.ts`, the web pad and pane, and the docs pass.
+- [x] **Redesign** (`65e6af8`, `f4d5428`, `dd08ccd`, `7ab8210`, 2026-11-25 to 27): core `View.Brief`, `Spec.Ledger`, `Find.Look`, `Link.Back`, `Help.Show`, `Review.Mark` and `Review.Clear`, `System.History`, and `Tool.Check`. The drafting-sheet web UI adds the entry page, a `/` command line (`slashCommands.ts`), `View.Theme(light|dark|halloween)`, `Audio.On` and `Audio.Off`, and self-hosted IBM Plex fonts. The MCP server calls core `runPipeline`. Master was fast-forwarded to `7ab8210`.
 
 ## Phase 6: Polish, Demo Video, and Submission (Dec 1 to 4 on the plan)
 

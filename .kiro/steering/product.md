@@ -9,6 +9,7 @@ Apply these rules to all generated UI, copy, and code.
 - Commands run by middle-click (button `1`) or Ctrl/Cmd-click on the token, against the active selection or focused `§` node.
 - Layout is two tracks. Left is the NLS Document Track. Right is `System.Tool` (editable command pad) over `System.Log` (append-only output).
 - Do not add a settings panel, a file menu, or a confirmation modal. For destructive intent, use `System.Undo` instead of a confirmation dialog.
+- One allowed exception: the entry page (`ThresholdVeil`) covers the workbench once per browser session. It closes on Enter, Escape, or its button, and `System.Veil` brings it back. It is a threshold, not a confirmation step, and no command depends on it. While it is up, the workbench is `inert`. The veil uses `aria-modal="true"` because it holds focus. Do not add any other overlay that blocks the workbench.
 
 ## 2. No retro CRT skins
 
