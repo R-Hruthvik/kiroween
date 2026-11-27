@@ -15,6 +15,8 @@ export {
   createWorkbenchState,
   pipelineError,
   runLine,
+  runPipeline,
+  type PipelineResult,
   type CommandEntry,
   type CommandRegistry,
   type WorkbenchState,

@@ -79,6 +79,8 @@ interface StageResult {
   state: WorkbenchState;
   section: string;
   error?: string;
+  /** Coordinates the handler reports as touched. Only set when a handler ran successfully. */
+  affectedCoordinates?: readonly string[];
 }
 
 async function runStage(
@@ -155,6 +157,7 @@ async function runStage(
       reviews: outcome.nextReviews ?? state.reviews,
     },
     section: `### ${outcome.logTitle}\n${outcome.logBody}`,
+    affectedCoordinates: outcome.affectedCoordinates,
   };
 }
 
@@ -199,10 +202,61 @@ export function pipelineError(line: string, registry: CommandRegistry): string |
   return "error" in checked ? checked.error : null;
 }
 
+/** What running a pipeline produced, before it is written to the log. */
+export interface PipelineResult {
+  readonly state: WorkbenchState;
+  /** One "### title" section per stage that ran, in order. */
+  readonly sections: readonly string[];
+  /** Union of the coordinates each successful stage reported, first-seen order, without duplicates. */
+  readonly affectedCoordinates: readonly string[];
+  /** The first stage error. Later stages do not run after it. */
+  readonly error?: string;
+}
+
 /**
- * Runs one line of Oberon text, which may hold a "->" pipeline.
- * Every stage is validated before any stage runs. Stages run left to right, and the first error stops the chain.
- * Output goes to one combined log entry.
+ * Runs the stages of a pipeline line left to right, with the first error stopping the chain.
+ * Every stage is validated before any stage runs. This is the single place that runs Oberon stages, so the
+ * web store and the MCP server both call it. The result has no log entry; runLine adds that.
+ */
+export async function runPipeline(
+  state: WorkbenchState,
+  line: string,
+  registry: CommandRegistry,
+  options: RunOptions = {},
+): Promise<PipelineResult> {
+  const checked = checkPipeline(line, registry);
+  if ("error" in checked) return { state, sections: [], affectedCoordinates: [], error: checked.error };
+
+  let current = state;
+  const sections: string[] = [];
+  const affected: string[] = [];
+  const seen = new Set<string>();
+  let error: string | undefined;
+  for (const { command, entry } of checked.stages) {
+    const result = await runStage(current, command, entry, options.padText);
+    current = result.state;
+    sections.push(result.section);
+    for (const coordinate of result.affectedCoordinates ?? []) {
+      if (seen.has(coordinate)) continue;
+      seen.add(coordinate);
+      affected.push(coordinate);
+    }
+    if (result.error) {
+      error = result.error;
+      break;
+    }
+    // Only core commands that succeed are recorded. System.History is not, so it never lists itself.
+    if (entry.control !== "history") {
+      current = { ...current, commandHistory: [...current.commandHistory, formatCommand(command)] };
+    }
+  }
+  return error === undefined
+    ? { state: current, sections, affectedCoordinates: affected }
+    : { state: current, sections, affectedCoordinates: affected, error };
+}
+
+/**
+ * Runs one line of Oberon text, which may hold a "->" pipeline, and appends one combined log entry.
  */
 export async function runLine(
   state: WorkbenchState,
@@ -214,27 +268,11 @@ export async function runLine(
   if ("error" in checked) {
     return { ...state, log: [...state.log, { title: line.trim(), body: "", error: checked.error }] };
   }
-  const { stages } = checked;
-
-  let current = state;
-  const sections: string[] = [];
-  let error: string | undefined;
-  for (const { command, entry } of stages) {
-    const result = await runStage(current, command, entry, options.padText);
-    current = result.state;
-    sections.push(result.section);
-    if (result.error) {
-      error = result.error;
-      break;
-    }
-    // Only core commands that succeed are recorded. System.History is not, so it never lists itself.
-    if (entry.control !== "history") {
-      current = { ...current, commandHistory: [...current.commandHistory, formatCommand(command)] };
-    }
-  }
-
-  const combined: LogEntry = error
-    ? { title: line.trim(), body: sections.join("\n\n"), error }
-    : { title: line.trim(), body: sections.join("\n\n") };
-  return { ...current, log: [...current.log, combined] };
+  const result = await runPipeline(state, line, registry, options);
+  const body = result.sections.join("\n\n");
+  const combined: LogEntry =
+    result.error === undefined
+      ? { title: line.trim(), body }
+      : { title: line.trim(), body, error: result.error };
+  return { ...result.state, log: [...result.state.log, combined] };
 }

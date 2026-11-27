@@ -5,20 +5,17 @@
 import { z } from "zod";
 import {
   BUILTIN_REGISTRY,
+  checkPipeline,
   createWorkbenchState,
   flattenNodes,
-  parseCommand,
   parseDocument,
   projectTree,
+  runPipeline,
   serializeTree,
-  splitPipeline,
   verifyAudit,
-  type CommandContext,
   type CommandEntry,
-  type CommandHandler,
   type CommandRegistry,
   type DocumentTree,
-  type ParsedCommand,
   type ProjectedNode,
   type ViewSpecCode,
 } from "@augeron/core";
@@ -212,10 +209,8 @@ export interface PipelineSelection {
 }
 
 /**
- * Runs an Oberon pipeline with the same validation, ordering, and log text as core's runLine, and
- * also collects each handler's affectedCoordinates. runLine does not return per-stage outcomes, so
- * this runner calls the registry handlers directly. The parity tests keep the two in step.
- * System.Undo, System.Redo, and System.ClearLog need browser history, so they are rejected here.
+ * Runs an Oberon pipeline through core's runPipeline, so validation, ordering and log text match the web app.
+ * The MCP server only adds its own policy: stages that need browser state are refused before anything runs.
  */
 export async function executePipeline(
   start: DocumentTree,
@@ -233,61 +228,31 @@ export async function executePipeline(
     error,
   });
 
-  const stages: { command: ParsedCommand; handler: CommandHandler }[] = [];
-  for (const stage of splitPipeline(line)) {
-    const command = parseCommand(stage);
-    if (!command) return failValidation(`Not a command token: "${stage}"`);
+  const checked = checkPipeline(line, registry);
+  if ("error" in checked) return failValidation(checked.error);
+  for (const { command, entry } of checked.stages) {
     const token = `${command.module}.${command.action}`;
-    const entry = registry.get(token);
-    if (!entry) return failValidation(`Unknown command: ${token}`);
     if (entry.control !== undefined || entry.needsWorkbench) {
       return failValidation(`${token} is not available in augeron_run_pipeline. It needs browser history or log state.`);
     }
     if (!entry.handler) return failValidation(`${entry.token} has no handler.`);
-    stages.push({ command, handler: entry.handler });
   }
 
-  let tree = start;
-  let viewSpec = selection.activeViewSpec;
-  const sections: string[] = [];
-  const affected: string[] = [];
-  const seen = new Set<string>();
-
-  for (const { command, handler } of stages) {
-    const ctx: CommandContext = {
-      tree,
-      selectedNodeIds: [...selection.selectedNodeIds],
-      selectedText: selection.selectedText,
-      activeViewSpec: viewSpec,
-    };
-    const outcome = await handler(ctx, command.arg);
-    if (outcome.error) {
-      sections.push(`### ${outcome.logTitle}\nERROR: ${outcome.error}`);
-      return {
-        updatedTree: tree,
-        nextViewSpec: viewSpec,
-        logTitle,
-        logBody: sections.join("\n\n"),
-        affectedCoordinates: affected,
-        error: outcome.error,
-      };
-    }
-    sections.push(`### ${outcome.logTitle}\n${outcome.logBody}`);
-    for (const coordinate of outcome.affectedCoordinates) {
-      if (seen.has(coordinate)) continue;
-      seen.add(coordinate);
-      affected.push(coordinate);
-    }
-    tree = outcome.updatedTree;
-    viewSpec = outcome.nextViewSpec ?? viewSpec;
-  }
-
+  const initial = createWorkbenchState(start);
+  const state = {
+    ...initial,
+    activeViewSpec: selection.activeViewSpec,
+    selectedNodeIds: [...selection.selectedNodeIds],
+    selectedText: selection.selectedText,
+  };
+  const result = await runPipeline(state, line, registry);
   return {
-    updatedTree: tree,
-    nextViewSpec: viewSpec,
+    updatedTree: result.state.history.present,
+    nextViewSpec: result.state.activeViewSpec,
     logTitle,
-    logBody: sections.join("\n\n"),
-    affectedCoordinates: affected,
+    logBody: result.sections.join("\n\n"),
+    affectedCoordinates: [...result.affectedCoordinates],
+    ...(result.error !== undefined ? { error: result.error } : {}),
   };
 }
 
