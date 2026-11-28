@@ -4,7 +4,7 @@ export { flattenNodes, serializeTree } from "./ast/flatten.js";
 export { letterSuffix, REF_PATTERN, COORDINATE_PATTERN, coordinatesMentioned } from "./ast/coordinate.js";
 export { projectTree, countProjected, flattenProjected, isVisible } from "./viewspec/projector.js";
 export { parseCommand, formatCommand, scanCommandTokens, splitPipeline, commandLineAt } from "./oberon/tokenizer.js";
-export { formatLogBody, groupFlagLines, summarizeLogEntry } from "./oberon/logView.js";
+export { formatLogBody, groupFlagLines, summarizeLogEntry } from "./oberon/entryView.js";
 export { reviewFingerprint, isReviewed } from "./review/marks.js";
 export { hiddenSummary } from "./viewspec/hidden.js";
 export { focusHidden } from "./viewspec/projector.js";
