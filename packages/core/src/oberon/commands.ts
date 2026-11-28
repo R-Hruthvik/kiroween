@@ -165,6 +165,16 @@ export const specAudit: CommandHandler = (ctx) => {
   };
 };
 
+/**
+ * True when the tree carries flags that only Spec.Audit sets. Parsing sets BROKEN_REF and
+ * UNVERIFIED_CLAIM itself, so those do not count. Same test as the web store's hasAuditFlags.
+ */
+function hasAuditFlags(tree: DocumentTree): boolean {
+  return flattenNodes(tree).some((node) =>
+    node.flags.some((flag) => flag.type === "CONTRADICTION" || flag.type === "AMBIGUOUS_TERM"),
+  );
+}
+
 export const specTighten: CommandHandler = (ctx) => {
   const scope = ctx.selectedNodeIds.length > 0 ? new Set(ctx.selectedNodeIds) : null;
   const changed: string[] = [];
@@ -179,8 +189,13 @@ export const specTighten: CommandHandler = (ctx) => {
   if (changed.length === 0) {
     return noChange(ctx.tree, "Spec.Tighten", "No filler or passive phrasing found in scope.");
   }
+  const hadAuditFlags = hasAuditFlags(ctx.tree);
+  const rebuilt = rebuildDocument(ctx.tree, texts.join("\n\n"));
+  // Re-parsing drops CONTRADICTION and AMBIGUOUS_TERM. An audited tree gets them back from a fresh audit.
+  // An unaudited tree stays unaudited.
+  const updatedTree = hadAuditFlags ? applyFlags(rebuilt, computeAuditFlags(rebuilt)) : rebuilt;
   return {
-    updatedTree: rebuildDocument(ctx.tree, texts.join("\n\n")),
+    updatedTree,
     logTitle: "Spec.Tighten",
     logBody: `Tightened ${changed.length} node(s): ${changed.join(", ")}.`,
     affectedCoordinates: changed,
@@ -220,8 +235,9 @@ export const outlineExtractTasks: CommandHandler = (ctx) => {
  * net count rises by at least K + min(K, cap) + 1 - D. K = D + 1 keeps that above zero for any D.
  */
 function injectFlawMarkdown(tree: DocumentTree): { markdown: string; target: string } {
+  // A § inside a code fence is an example, not a reference, so it is not counted.
   const danglingOccurrences = flattenNodes(tree).reduce(
-    (sum, node) => sum + brokenRefFlags(node.rawText, tree.indexByCoord).length,
+    (sum, node) => sum + (isCodeFence(node.rawText) ? 0 : brokenRefFlags(node.rawText, tree.indexByCoord).length),
     0,
   );
   const copies = danglingOccurrences + 1;
