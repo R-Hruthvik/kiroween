@@ -4,6 +4,7 @@
  */
 import { z } from "zod";
 import {
+  BROWSER_TOKENS,
   BUILTIN_REGISTRY,
   checkPipeline,
   createWorkbenchState,
@@ -63,7 +64,7 @@ function commandCatalog(registry: CommandRegistry): string {
     "Commands available in this server:",
     ...lines,
     `Not available here (they need browser history or log state): ${unavailable.join(", ")}.`,
-    "Browser-only tokens (Doc.Load, AI.Config, Edit.Source, Edit.Done) are not available here either.",
+    `Browser-only tokens are not available here either: ${BROWSER_TOKENS.map((entry) => entry.token).join(", ")}.`,
   ].join("\n");
 }
 

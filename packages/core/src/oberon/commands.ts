@@ -422,7 +422,7 @@ const BUILTIN_ENTRIES: readonly CommandEntry[] = [
   { token: "Review.Mark", mutatesTree: false, scope: "Coordinate", argument: "a § address", example: "Review.Mark(§4.3a)", description: "Mark one § paragraph reviewed. The mark is kept outside the text and stops counting when that paragraph changes.", handler: reviewMark, needsWorkbench: true },
   { token: "Review.Clear", mutatesTree: false, scope: "Coordinate", argument: "a § address", example: "Review.Clear(§4.3a)", description: "Remove the review mark from one § paragraph. The text is unchanged.", handler: reviewClear, needsWorkbench: true },
   { token: "Spec.Audit", mutatesTree: false, scope: "Full Doc", description: "Flag contradictions, broken references, unverified claims, and vague terms.", handler: specAudit },
-  { token: "Spec.Tighten", mutatesTree: true, scope: "Selection or Full Doc", description: "Strip filler and rewrite passive phrasing as EARS.", handler: specTighten },
+  { token: "Spec.Tighten", mutatesTree: true, scope: "Selection or Full Doc", description: "Strip filler phrases such as \"it is important to note that\", \"basically\", and \"very\", and rewrite \"in order to\" as \"to\". Modal verbs are never changed.", handler: specTighten },
   { token: "Cite.Verify", mutatesTree: false, scope: "Full Doc", description: "Check § references and citations.", handler: citeVerify },
   { token: "Outline.ExtractTasks", mutatesTree: false, scope: "Selection or Full Doc", description: "Extract a prioritized task checklist.", handler: outlineExtractTasks },
   { token: "Doc.InjectFlaw", mutatesTree: true, scope: "Full Doc", description: "Demo helper: inject a conflict and a broken reference.", handler: docInjectFlaw },

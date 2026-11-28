@@ -123,7 +123,7 @@ Tokens take the form `Module.Action` or `Module.Action(arg)`. Pipelines look lik
 
 This project was built with Kiro as a spec-driven workflow. The repository keeps its Kiro artifacts at the root, on purpose.
 
-- **`.kiro/specs/augeron-workbench/`:** `requirements.md`, `design.md`, `tasks.md` (the phase checklist), and `ui-design.md` (the Swiss editorial design system).
+- **`.kiro/specs/augeron-workbench/`:** `requirements.md`, `design.md`, `tasks.md` (the phase checklist), and `ui-design.md` (the drafting-sheet design system and its three themes).
 - **`.kiro/steering/`:** `product.md` (zero-menu UX and scope), `architecture.md` (package boundaries and the deterministic-fallback rule), and `oberon-nls-grammar.md` (the `§` coordinate and command token grammar).
 - **`.kiro/hooks/verify-invariants.json`:** a PostFileSave hook named `verify-core-invariants`. It matches saves under `packages/core/src` and runs the fast-check suite.
 - **`.kiro/skills/kiroween-preflight/`:** checks repo structure and submission readiness.
