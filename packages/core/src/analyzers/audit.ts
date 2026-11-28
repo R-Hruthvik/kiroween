@@ -2,11 +2,12 @@ import type { DocNode, DocumentTree, NodeFlag } from "../types.js";
 import { brokenRefFlags, classificationFlags, isCodeFence } from "../ast/classifier.js";
 import { citationKeyFlags, collectReferenceKeys } from "../ast/citations.js";
 import { flattenNodes } from "../ast/flatten.js";
+import { proseForAudit } from "../ast/markdown.js";
 import { detectContradictions } from "./contradiction.js";
 import { vagueTermsIn } from "./vague.js";
 
 export function vagueTermFlags(text: string): NodeFlag[] {
-  return vagueTermsIn(text).map((term) => ({
+  return vagueTermsIn(proseForAudit(text)).map((term) => ({
     type: "AMBIGUOUS_TERM",
     message: `Vague term "${term}" needs a measurable target.`,
   }));
@@ -20,7 +21,7 @@ export function computeAuditFlags(tree: DocumentTree): Map<string, NodeFlag[]> {
   const flagsById = new Map<string, NodeFlag[]>();
   for (const node of nodes) {
     flagsById.set(node.id, [
-      ...brokenRefFlags(node.rawText, tree.indexByCoord),
+      ...(isCodeFence(node.rawText) ? [] : brokenRefFlags(node.rawText, tree.indexByCoord)),
       ...citationFlagsFor(node, referenceKeys),
       ...classificationFlags(node.role, node.citations, node.rawText),
       ...vagueTermFlags(node.rawText),
@@ -47,7 +48,7 @@ export function citeVerifyFlags(tree: DocumentTree): Map<string, NodeFlag[]> {
       (flag) => flag.type !== "BROKEN_REF" && flag.type !== "UNVERIFIED_CLAIM",
     );
     flagsById.set(node.id, [
-      ...brokenRefFlags(node.rawText, tree.indexByCoord),
+      ...(isCodeFence(node.rawText) ? [] : brokenRefFlags(node.rawText, tree.indexByCoord)),
       ...citationFlagsFor(node, referenceKeys),
       ...classificationFlags(node.role, node.citations, node.rawText),
       ...kept,

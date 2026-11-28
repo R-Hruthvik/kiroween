@@ -1,7 +1,7 @@
 import type { NodeFlag, SemanticRole } from "../types.js";
 import { CITATION_PATTERN, REF_PATTERN } from "./coordinate.js";
 import { BRACKET_KEY } from "./citations.js";
-import { withoutCodeAndLinkText } from "./markdown.js";
+import { proseForAudit, withoutCodeAndLinkText } from "./markdown.js";
 
 /**
  * A quantity is a number with a unit or a currency sign. Bare numbers are not quantities, so
@@ -175,9 +175,11 @@ export function classificationFlags(
   text: string,
 ): NodeFlag[] {
   if (role === "Heading" || citations.length > 0) return [];
+  // Comments, code, headings, and URLs are not prose, so their numbers and comparatives are not claims.
+  const prose = proseForAudit(text);
   const flags: NodeFlag[] = [];
   if (!isCodeFence(text)) {
-    for (const sentence of splitSentences(text)) {
+    for (const sentence of splitSentences(prose)) {
       const claim = claimOf(sentence.replace(CITATION_PATTERN, " "));
       if (claim?.kind === "numeric") {
         flags.push({
@@ -188,7 +190,7 @@ export function classificationFlags(
     }
   }
   if (flags.length > 0 || role !== "Claim") return flags;
-  const claim = claimOf(text.replace(CITATION_PATTERN, " "));
+  const claim = claimOf(prose.replace(CITATION_PATTERN, " "));
   if (claim === null || claim.kind !== "comparative") return [];
   return [
     {

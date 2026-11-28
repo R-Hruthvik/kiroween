@@ -192,7 +192,7 @@ export function parseDocument(markdown: string, options: ParseOptions = {}): Doc
   for (const node of flat) {
     const fenced = isCodeFence(node.rawText);
     node.flags = [
-      ...brokenRefFlags(node.rawText, indexByCoord),
+      ...(fenced ? [] : brokenRefFlags(node.rawText, indexByCoord)),
       ...(fenced ? [] : citationKeyFlags(node.rawText, referenceKeys)),
       ...classificationFlags(node.role, node.citations, node.rawText),
     ];
