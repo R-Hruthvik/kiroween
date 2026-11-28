@@ -61,7 +61,6 @@ The interfaces are defined verbatim in SPEC.md Section 4 and copied to `packages
 
 - Middle-click (`e.button === 1`) and Ctrl/Cmd-click run a command. `mousedown` calls `preventDefault` to suppress browser auto-scroll.
 - `lastSelectedNodeIds` and `lastSelectedText` are kept in state, so running a command from `System.Tool` keeps the Document Track selection.
-- `PulseOverlay` measures `[data-coord="§2.1a"]` and `[data-cmd-id="..."]` and draws a 350 ms SVG pulse between them.
 
 ## Persistence and Offline Behavior
 
