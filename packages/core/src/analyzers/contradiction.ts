@@ -101,8 +101,12 @@ function isScoped(entry: Entry): boolean {
   return entry.kind === "metric" ? entry.metric.scoped : entry.polarity.scoped;
 }
 
-const LE_PATTERN = /\b(?:under|below|within|at most|no more than|less than|up to|fewer than|no greater than)\b|[<≤]/gi;
-const GE_PATTERN = /\b(?:over|above|at least|no less than|more than|greater than|exceeding)\b|[>≥]/gi;
+/**
+ * Comparator words and symbols in one pattern. Groups 1 and 3 are upper bounds (le). Groups 2 and 4 are lower
+ * bounds (ge). Negated phrases are whole alternatives, so the "more than" inside "no more than" is consumed by
+ * the match and cannot set the direction on its own.
+ */
+const COMPARATOR_PATTERN = /\b(?:(no more than|no greater than|under|below|within|at most|up to|fewer than|less than)|(no less than|over|above|at least|more than|greater than|exceeding))\b|([<≤])|([>≥])/gi;
 
 /** The part of the clause after its last clause boundary or unit word, so an earlier comparator does not leak in. */
 function textAfterLastBoundary(clause: string): string {
@@ -114,10 +118,13 @@ function textAfterLastBoundary(clause: string): string {
   return clause.slice(cut);
 }
 
-function lastIndexOf(text: string, pattern: RegExp): number {
-  let last = -1;
-  for (const match of text.matchAll(pattern)) last = match.index ?? last;
-  return last;
+/** Direction of the last comparator in the text, from the phrase or symbol that matched. "eq" when there is none. */
+function lastComparator(text: string): "le" | "ge" | "eq" {
+  let direction: "le" | "ge" | "eq" = "eq";
+  for (const match of text.matchAll(COMPARATOR_PATTERN)) {
+    direction = match[1] !== undefined || match[3] !== undefined ? "le" : "ge";
+  }
+  return direction;
 }
 
 interface Metric {
@@ -204,9 +211,7 @@ function extractMetrics(text: string): Metric[] {
 
     const value = Number(hit.value.replace(/,/g, "")) * unitInfo.factor;
     const near = textAfterLastBoundary(clause).slice(-40);
-    const le = lastIndexOf(near, LE_PATTERN);
-    const ge = lastIndexOf(near, GE_PATTERN);
-    const comparator = le < 0 && ge < 0 ? "eq" : le > ge ? "le" : "ge";
+    const comparator = lastComparator(near);
 
     metrics.push({
       head: subject[subject.length - 1] ?? "",
