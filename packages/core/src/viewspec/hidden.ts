@@ -34,15 +34,17 @@ function projectionHidden(tree: DocumentTree, view: ViewSpecCode, level: number 
     if (node.role === "Heading") headings += 1;
     else paragraphs += 1;
   }
-  // Under f every paragraph is shown, but some of its sentences are collapsed to [+Nw].
+  // Only f collapses sentences. Under f every paragraph is shown, but some of its sentences are collapsed to [+Nw].
   let sentences = 0;
   let words = 0;
-  for (const item of projected) {
-    const collapsed = focusHidden(item.node);
-    if (collapsed.sentences === 0) continue;
-    sentences += collapsed.sentences;
-    words += collapsed.words;
-    hidden.add(item.node.coordinate);
+  if (view === "f") {
+    for (const item of projected) {
+      const collapsed = focusHidden(item.node);
+      if (collapsed.sentences === 0) continue;
+      sentences += collapsed.sentences;
+      words += collapsed.words;
+      hidden.add(item.node.coordinate);
+    }
   }
   return { paragraphs, headings, sentences, words, addresses: inDocumentOrder(tree, hidden) };
 }

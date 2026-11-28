@@ -95,3 +95,23 @@ describe("hiddenSummary is read-only and deterministic", () => {
     expect(JSON.stringify(tree)).toBe(before);
   });
 });
+
+describe("hiddenSummary collapses sentences only under View.Spec(f)", () => {
+  const MULTI_SENTENCE = "# A\n\nThe service MUST respond. Billing runs nightly. Retries SHALL be limited.";
+
+  it("reports nothing hidden by the full view a on a multi-sentence paragraph", () => {
+    const tree = parseDocument(MULTI_SENTENCE);
+    const summary = hiddenSummary(tree, { view: "a" });
+    expect(summary.sentences).toBe(0);
+    expect(summary.words).toBe(0);
+    expect(summary.addresses).toEqual([]);
+    expect(summary.text).toBe("Nothing hidden by View.Spec(a).");
+  });
+
+  it("still reports the collapsed sentences under f, and the footer names View.Spec(f)", () => {
+    const tree = parseDocument(MULTI_SENTENCE);
+    const summary = hiddenSummary(tree, { view: "f" });
+    expect(summary.sentences).toBeGreaterThan(0);
+    expect(summary.text).toContain("View.Spec(f)");
+  });
+});
